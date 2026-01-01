@@ -1,26 +1,93 @@
 @import "tailwindcss";
 
+@theme {
+  --color-zinc-50: #fafafa;
+  --color-zinc-100: #f4f4f5;
+  --color-zinc-200: #e4e4e7;
+  --color-zinc-300: #d4d4d8;
+  --color-zinc-400: #a1a1aa;
+  --color-zinc-500: #71717a;
+  --color-zinc-600: #52525b;
+  --color-zinc-700: #3f3f46;
+  --color-zinc-800: #27272a;
+  --color-zinc-900: #18181b;
+  --color-zinc-950: #09090b;
+
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+
+  --color-emerald-500: #10b981;
+  --color-amber-500: #f59e0b;
+  --color-rose-500: #f43f5e;
+
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: var(--color-zinc-950);
+  --foreground: var(--color-zinc-50);
+  --card: var(--color-zinc-900);
+  --card-foreground: var(--color-zinc-50);
+  --popover: var(--color-zinc-950);
+  --popover-foreground: var(--color-zinc-50);
+  --primary: var(--color-zinc-50);
+  --primary-foreground: var(--color-zinc-900);
+  --secondary: var(--color-zinc-800);
+  --secondary-foreground: var(--color-zinc-50);
+  --muted: var(--color-zinc-800);
+  --muted-foreground: var(--color-zinc-400);
+  --accent: var(--color-zinc-800);
+  --accent-foreground: var(--color-zinc-50);
+  --destructive: var(--color-rose-500);
+  --destructive-foreground: var(--color-zinc-50);
+  --border: var(--color-zinc-800);
+  --input: var(--color-zinc-800);
+  --ring: var(--color-zinc-300);
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+}
+
+/* Glassmorphism & Premium Effects */
+.glass {
+  background: rgba(24, 24, 27, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(63, 63, 70, 0.3);
+}
+
+.card-gradient {
+  background: linear-gradient(135deg, rgba(39, 39, 42, 0.5) 0%, rgba(24, 24, 27, 0.8) 100%);
+}
+
+.glow-emerald {
+  box-shadow: 0 0 20px -5px rgba(16, 185, 129, 0.2);
+}
+
+.glow-amber {
+  box-shadow: 0 0 20px -5px rgba(245, 158, 11, 0.2);
+}
+
+.glow-rose {
+  box-shadow: 0 0 20px -5px rgba(244, 63, 94, 0.2);
+}
+

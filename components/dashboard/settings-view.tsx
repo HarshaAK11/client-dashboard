@@ -27,6 +27,8 @@ import {
     ArrowRight
 } from 'lucide-react';
 import { cn } from '@/components/ui/dashboard-components';
+import { GSAPButton } from '@/components/ui/gsap-button';
+import { useGSAPHover } from '@/hooks/use-gsap-hover';
 
 const tabs = [
     { id: 'tenant', label: 'Tenant Config', icon: Building2 },
@@ -561,10 +563,10 @@ export default function SettingsView() {
                     <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-zinc-50 to-zinc-400 bg-clip-text text-transparent">Platform Settings</h2>
                     <p className="text-zinc-500 mt-1">Configure tenant foundation, AI policies, and compliance.</p>
                 </div>
-                <button className="flex items-center gap-2 bg-zinc-50 text-zinc-950 px-6 py-2.5 rounded-xl font-bold hover:bg-zinc-200 transition-all shadow-lg shadow-zinc-50/5">
+                <GSAPButton className="px-6 py-2.5 shadow-lg shadow-zinc-50/5">
                     <Save size={18} />
                     Save Changes
-                </button>
+                </GSAPButton>
             </div>
 
             <div className="flex flex-col lg:flex-row gap-8">
@@ -572,19 +574,13 @@ export default function SettingsView() {
                 <aside className="lg:w-56 shrink-0">
                     <nav className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible pb-4 lg:pb-0">
                         {tabs.map((tab) => (
-                            <button
+                            <GSAPTab
                                 key={tab.id}
+                                active={activeTab === tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={cn(
-                                    "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap",
-                                    activeTab === tab.id
-                                        ? "bg-zinc-900 text-zinc-50 border border-zinc-800 shadow-sm"
-                                        : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50"
-                                )}
-                            >
-                                <tab.icon size={18} className={tab.color} />
-                                {tab.label}
-                            </button>
+                                icon={<tab.icon size={18} className={tab.color} />}
+                                label={tab.label}
+                            />
                         ))}
                     </nav>
                 </aside>
@@ -618,6 +614,25 @@ function ToggleRow({ label, description, enabled }: { label: string; description
             </div>
             <ToggleSwitch enabled={enabled} />
         </div>
+    );
+}
+
+function GSAPTab({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+    const ref = useGSAPHover();
+    return (
+        <button
+            ref={ref}
+            onClick={onClick}
+            className={cn(
+                "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap",
+                active
+                    ? "bg-zinc-900 text-zinc-50 border border-zinc-800 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50"
+            )}
+        >
+            {icon}
+            {label}
+        </button>
     );
 }
 

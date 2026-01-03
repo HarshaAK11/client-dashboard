@@ -47,6 +47,7 @@ export async function POST(request: Request) {
                 break;
 
             case 'escalate_department':
+            case 'escalate_department_confirm':
                 if (!payload?.departmentId) return Response.json({ error: 'Missing departmentId' }, { status: 400 });
                 updateData.department_id = payload.departmentId;
                 auditMetadata.toDepartment = payload.departmentId;
@@ -65,7 +66,8 @@ export async function POST(request: Request) {
                 break;
 
             case 'false_escalation':
-                updateData.current_state = 'resolved';
+            case 'false_escalation_confirm':
+                updateData.current_state = 'handled';
                 auditMetadata.resolvedAs = 'false_escalation';
                 break;
 

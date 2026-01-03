@@ -57,6 +57,7 @@ export async function GET(request: Request) {
             resourceId: 'all',
             endpoint: '/api/emails',
             request,
+            tenantId: user.tenant_id,
             metadata: { count: data.length },
         });
 

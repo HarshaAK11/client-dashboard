@@ -44,12 +44,13 @@ import {
     EventState,
     cn
 } from '@/components/ui/dashboard-components';
+import { GSAPButton } from '@/components/ui/gsap-button';
 import { useAuth } from '@/contexts/UserContext';
 import { permissions } from '@/lib/permissions';
 
 export default function UnifiedDashboard() {
     const { user, loading } = useAuth();
-    
+
     // Shared state
     const [mailData, setMailData] = useState<any[]>([]);
     const [stats, setStats] = useState({
@@ -124,7 +125,7 @@ export default function UnifiedDashboard() {
         fetch('/api/escalations')
             .then(res => res.json())
             .then(json => {
-                if(json.data) {
+                if (json.data) {
                     const data = json.data
                     const escalatedMails = data.filter((item: any) => item.current_state === 'needs_attention').length
                     setEscalatedMails(escalatedMails)
@@ -216,13 +217,13 @@ export default function UnifiedDashboard() {
                         />
                     </div>
                     <div className="flex gap-2">
-                        <button className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-50 transition-all">
+                        <GSAPButton variant="secondary" className="px-3 py-2 text-xs">
                             <Filter className="w-3.5 h-3.5" />
                             Filters
-                        </button>
-                        <button className="flex items-center gap-2 px-3 py-2 bg-zinc-50 text-zinc-950 rounded-lg text-xs font-bold hover:bg-zinc-200 transition-all">
+                        </GSAPButton>
+                        <GSAPButton variant="primary" className="px-3 py-2 text-xs">
                             Refresh Queue
-                        </button>
+                        </GSAPButton>
                     </div>
                 </div>
 

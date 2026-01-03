@@ -2,7 +2,6 @@ import { supabase } from "@/lib/supabase";
 import { getAuthenticatedUser } from "@/middleware/auth";
 import { permissions } from "@/lib/permissions";
 import { logAccess } from "@/lib/audit";
-import { EmailEvent } from "@/types/email-events";
 
 /**
  * GET /api/escalations
@@ -22,7 +21,7 @@ export async function GET(request: Request) {
             console.warn('Auth failed, returning all data (dev mode)');
             const { data, error } = await supabase
                 .from('email_events')
-                .select('*, assigned_user:users!assigned_user_id(full_name)')
+                .select('*, assigned_user:users!assigned_user_id(full_name), department:departments!department_id(name)')
                 .eq('current_state', 'needs_attention')
                 .order('created_at', { ascending: false });
 
@@ -42,7 +41,7 @@ export async function GET(request: Request) {
         // Build role-based query
         let query = supabase
             .from('email_events')
-            .select('*, assigned_user:users!assigned_user_id(full_name)')
+            .select('*, assigned_user:users!assigned_user_id(full_name), department:departments!department_id(name)')
             .eq('current_state', 'needs_attention');
 
         // Apply role-based filters
@@ -95,12 +94,18 @@ function formatEscalations(data: any[]) {
         summary: item.summary || "No summary available",
         reason: item.escalation_reason || "AI confidence below threshold",
         priority: item.priority || "medium",
-        department: item.department_id || "Unassigned",
+        department: item.department?.name || "Unassigned",
         assignedTo: item.assigned_user?.full_name || "Unassigned",
         assignedToId: item.assigned_user_id || "Unassigned",
         escalatedAt: item.created_at ? new Date(item.created_at) : new Date(),
         slaDeadline: item.sla_deadline ? new Date(item.sla_deadline) : new Date(Date.now() + 1000 * 60 * 60),
         confidence: item.confidence_score ?? item.sentiment_score ?? 0.5,
         aiReason: item.failure_reason || "Manual escalation required.",
+        subject: item.subject || "No subject",
+        content: item.content || "No content available",
+        source: item.source || "email",
+        externalMessageId: item.external_message_id,
+        externalThreadId: item.external_thread_id,
     }));
 }
+

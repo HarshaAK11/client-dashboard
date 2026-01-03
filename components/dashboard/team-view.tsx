@@ -20,6 +20,7 @@ import {
     TableCell,
     cn
 } from '@/components/ui/dashboard-components';
+import { GSAPButton } from '@/components/ui/gsap-button';
 import { useAuth } from '@/contexts/UserContext';
 import { permissions } from '@/lib/permissions';
 
@@ -57,10 +58,10 @@ export default function TeamView() {
                     <p className="text-zinc-500">Manage your organization's users and their roles.</p>
                 </div>
                 {user && permissions.canManageUsers(user.role) && (
-                    <button className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-black px-4 py-2 rounded-lg font-bold transition-colors">
+                    <GSAPButton variant="primary">
                         <UserPlus size={18} />
                         Invite Member
-                    </button>
+                    </GSAPButton>
                 )}
             </div>
 
@@ -76,10 +77,10 @@ export default function TeamView() {
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
-                <button className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-zinc-800 transition-colors">
+                <GSAPButton variant="secondary" className="px-4 py-2.5">
                     <Filter size={16} />
                     Filters
-                </button>
+                </GSAPButton>
             </div>
 
             {/* Users Table */}

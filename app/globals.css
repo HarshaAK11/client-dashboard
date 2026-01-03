@@ -66,6 +66,16 @@ body {
   * {
     border-color: var(--border);
   }
+
+  button,
+  [role="button"],
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  .cursor-pointer,
+  .clickable {
+    cursor: pointer;
+  }
 }
 
 /* Glassmorphism & Premium Effects */
@@ -90,4 +100,3 @@ body {
 .glow-rose {
   box-shadow: 0 0 20px -5px rgba(244, 63, 94, 0.2);
 }
-

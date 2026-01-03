@@ -4,6 +4,20 @@ This guide outlines how to manually verify the role-based access control (RBAC) 
 
 ## Prerequisites
 1. Ensure `NEXT_PUBLIC_DEV_MODE=true` is set in `.env.local`.
+
+
+### Quick sign-in for testing
+Use the built-in login page at `/login` to sign in with test credentials:
+
+- Admin: `admin@example.com` / `Admin@12345`
+- Manager: `manager@example.com` / `Manager@12345`
+- Agent: `agent@example.com` / `Agent@12345`
+
+If you haven't created these accounts in your Supabase project, either run `npm run seed:dev-users` after starting your Supabase, or create them manually in the Supabase Dashboard.
+
+Note: The quick-fill buttons were removed from the login page; the **Dev Mode role switcher** still requires you to be signed in. For security, switching to a different role in Dev Mode without using the corresponding account will sign you out and redirect you to the `/login` page — you must sign in again with the appropriate role credentials to change dashboards.
+
+Offline dev fallback: If `NEXT_PUBLIC_DEV_MODE=true` and your Supabase instance is unreachable, the app will allow signing in with one of the test emails (`admin@example.com`, `manager@example.com`, `agent@example.com`) and create a local mock session so you can continue UI testing without a running Supabase instance.
 2. Run the development server: `npm run dev`.
 3. Open the dashboard in your browser (usually `http://localhost:3000`).
 4. **Note:** In Dev Mode, clicking a role in the sidebar will automatically create a mock user session if you are not logged in.

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
     LayoutDashboard,
     ShieldAlert,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/components/ui/dashboard-components';
 import { useAuth, Role } from '@/contexts/UserContext';
+import { useToast } from '@/components/ui/toast';
 
 interface DashboardLayoutProps {
     children: React.ReactNode;
@@ -25,9 +27,13 @@ export default function DashboardLayout({
     currentView,
     onViewChange
 }: DashboardLayoutProps) {
-    const { user, devOverrideRole } = useAuth();
+    const router = useRouter();
+    const { user, devOverrideRole, signOut } = useAuth();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [loggingOut, setLoggingOut] = useState(false);
     const isDev = process.env.NEXT_PUBLIC_DEV_MODE === 'true';
+
+    const { showToast } = useToast();
 
     const navigation = [
         { name: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'manager', 'agent'] },
@@ -37,6 +43,10 @@ export default function DashboardLayout({
         { name: 'Events', icon: Mail, roles: ['agent'] },
         { name: 'Settings', icon: Settings, roles: ['admin', 'agent'] },
     ];
+
+    function showAccessDeniedToast(viewName: string, role?: string) {
+        showToast(`Access denied: ${role ?? 'unknown'} cannot access ${viewName}. You have been signed out.`, 'error');
+    }
 
     const filteredNav = navigation.filter(item => user?.role && item.roles.includes(user.role));
 
@@ -58,7 +68,30 @@ export default function DashboardLayout({
                     {filteredNav.map((item) => (
                         <button
                             key={item.name}
-                            onClick={() => onViewChange(item.name)}
+                            onClick={async () => {
+                                // Enforce strict RBAC: only allow navigation if current authenticated role is allowed
+                                if (!user || !item.roles.includes(user.role)) {
+                                    // Show message, sign out and redirect to login
+                                    try {
+                                        // Use toast if available
+                                        // eslint-disable-next-line @typescript-eslint/no-use-before-define
+                                        showAccessDeniedToast && showAccessDeniedToast(item.name, user?.role);
+                                    } catch (e) {
+                                        // ignore
+                                    }
+                                    setLoggingOut(true);
+                                    try {
+                                        await signOut();
+                                    } catch (e) {
+                                        console.error('Error signing out on unauthorized access', e);
+                                    }
+                                    setLoggingOut(false);
+                                    router.push('/login');
+                                    return;
+                                }
+
+                                onViewChange(item.name);
+                            }}
                             className={cn(
                                 "flex items-center gap-3 px-3 py-2 rounded-lg transition-all group",
                                 currentView === item.name
@@ -74,14 +107,31 @@ export default function DashboardLayout({
 
 
                 {/* Role Switcher (Development Mode Only) */}
-                {isDev && devOverrideRole && (
+                {isDev && devOverrideRole ? (
                     <div className="p-4 border-t border-zinc-800/50 flex flex-col gap-2">
                         {isSidebarOpen && <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold px-2">Dev Mode - Role Switcher</span>}
                         <div className={cn("flex flex-col gap-1", !isSidebarOpen && "items-center")}>
                             {(['admin', 'manager', 'agent'] as Role[]).map((role) => (
                                 <button
                                     key={role}
-                                    onClick={() => devOverrideRole(role)}
+                                    onClick={async () => {
+                                        // Prevent switching to a different role without re-authenticating
+                                        if (role !== user?.role) {
+                                            showToast('You must sign in with the correct role credentials to switch dashboards. Signing out now.', 'error');
+                                            setLoggingOut(true);
+                                            try {
+                                                await signOut();
+                                            } catch (e) {
+                                                console.error('Error signing out on role change attempt', e);
+                                            }
+                                            setLoggingOut(false);
+                                            router.push('/login');
+                                            return;
+                                        }
+
+                                        // No-op if it's the same role
+                                        if (devOverrideRole) devOverrideRole(role);
+                                    }}
                                     className={cn(
                                         "px-3 py-1.5 rounded-md text-xs font-medium transition-all capitalize",
                                         user?.role === role
@@ -94,14 +144,33 @@ export default function DashboardLayout({
                             ))}
                         </div>
                     </div>
-                )}
+                ) : isDev && !user ? (
+                    <div className="p-4 border-t border-zinc-800/50">
+                        <div className="text-xs text-zinc-500">Sign in to enable the Dev Mode role switcher</div>
+                    </div>
+                ) : null}
 
                 <div className="p-4 border-t border-zinc-800/50">
-                    <button className={cn(
-                        "flex items-center gap-3 px-3 py-2 w-full rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
-                    )}>
+                    <button
+                        onClick={async () => {
+                            setLoggingOut(true);
+                            try {
+                                await signOut();
+                                router.push('/login');
+                            } catch (e) {
+                                console.error('Logout failed', e);
+                            } finally {
+                                setLoggingOut(false);
+                            }
+                        }}
+                        disabled={loggingOut}
+                        className={cn(
+                            "flex items-center gap-3 px-3 py-2 w-full rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all",
+                            loggingOut && 'opacity-60 cursor-wait'
+                        )}
+                    >
                         <LogOut className="w-5 h-5" />
-                        {isSidebarOpen && <span className="text-sm font-medium">Logout</span>}
+                        {isSidebarOpen && <span className="text-sm font-medium">{loggingOut ? 'Logging out...' : 'Logout'}</span>}
                     </button>
                 </div>
             </aside>

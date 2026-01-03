@@ -115,8 +115,46 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             }
 
             await fetchUserData(data.user.id);
-        } catch (error) {
+            // If a real user signs in, clear any dev-only role override
+            setDevRole(null);
+        } catch (error: any) {
             console.error('Error signing in:', error);
+
+            // Provide clearer error for network/connectivity problems
+            const networkMsg = 'Failed to reach Supabase. Check that your Supabase instance is running and that NEXT_PUBLIC_SUPABASE_URL in .env.local is correct.';
+            const errMsg = String(error?.message || error?.name || '').toLowerCase();
+            const isNetwork = errMsg.includes('fetch') || errMsg.includes('connectionrefused') || errMsg.includes('ecoff') || errMsg.includes('authretryablefetcherror');
+
+            // Dev-mode offline fallback: if Supabase is unreachable and we are in dev mode, create a local mock session
+            if (isDev && isNetwork) {
+                console.warn('Supabase unreachable — using local dev fallback to sign in for testing.');
+
+                const roleMap: Record<string, Role> = {
+                    'admin@example.com': 'admin',
+                    'manager@example.com': 'manager',
+                    'agent@example.com': 'agent',
+                };
+
+                const role = roleMap[email] ?? 'admin';
+
+                setUser({
+                    id: `dev-${role}-${Date.now()}`,
+                    email,
+                    role,
+                    tenant_id: 'dev-tenant',
+                    full_name: `${role[0].toUpperCase()}${role.slice(1)} (Dev)`,
+                });
+
+                // Ensure dev role overrides are cleared
+                setDevRole(null);
+
+                return; // success
+            }
+
+            if (isNetwork) {
+                throw new Error(`${networkMsg} (${error?.message || error?.name})`);
+            }
+
             throw error;
         }
     }
@@ -132,24 +170,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }
     }
 
-    // Development mode: override role without changing database
-    // If user is null but devRole is set, create a mock user
-    const effectiveUser = isDev && devRole
-        ? (user
-            ? { ...user, role: devRole }
-            : {
-                id: 'dev-mock-user',
-                email: 'dev@example.com',
-                role: devRole,
-                tenant_id: 'dev-tenant',
-                full_name: 'Dev User',
-                department_id: devRole === 'manager' ? 'dev-dept-001' : undefined
-            } as User)
-        : user;
-
-    const devOverrideRole = isDev
+    // Development mode: override role only for authenticated users
+    // Dev role switcher requires a signed-in user; do not create mock users when unauthenticated
+    const devOverrideRole = isDev && user
         ? (role: Role) => setDevRole(role)
         : undefined;
+
+    const effectiveUser = user && isDev && devRole
+        ? { ...user, role: devRole }
+        : user;
 
     return (
         <UserContext.Provider

@@ -1,4 +1,5 @@
-import { supabase } from '@/lib/supabase';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
 import { Role } from '@/contexts/UserContext';
 
 /**
@@ -17,7 +18,8 @@ export async function validateRoleSnapshot(
     sessionRole: string
 ): Promise<void> {
     try {
-        const { data: currentUser, error } = await supabase
+        const admin = getSupabaseAdmin();
+        const { data: currentUser, error } = await (admin || createSupabaseBrowserClient())
             .from('users')
             .select('role')
             .eq('id', sessionUserId)
@@ -45,7 +47,8 @@ export async function hasRoleChanged(
     sessionRole: string
 ): Promise<boolean> {
     try {
-        const { data: currentUser } = await supabase
+        const admin = getSupabaseAdmin();
+        const { data: currentUser } = await (admin || createSupabaseBrowserClient())
             .from('users')
             .select('role')
             .eq('id', sessionUserId)

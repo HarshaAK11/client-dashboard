@@ -1,4 +1,5 @@
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 /**
  * Access Audit Logging System
@@ -11,7 +12,7 @@ export interface AuditLog {
     id?: string;
     user_id: string;
     user_role: string;
-    action: 'read' | 'write' | 'delete';
+    action: 'read' | 'write' | 'delete' | 'update';
     resource_type: 'email_event' | 'escalation' | 'user' | 'department' | 'tenant';
     resource_id: string;
     endpoint: string;
@@ -66,8 +67,9 @@ export async function logAccess({
             timestamp: new Date(),
         };
 
-        // Insert into audit_logs table
-        const { error } = await supabase
+        // Insert into audit_logs table using admin client to bypass RLS
+        const admin = getSupabaseAdmin();
+        const { error } = await (admin || createSupabaseBrowserClient())
             .from('audit_logs')
             .insert(auditLog);
 
@@ -90,7 +92,8 @@ export async function getAuditLogs(
     limit: number = 50
 ): Promise<AuditLog[]> {
     try {
-        const { data, error } = await supabase
+        const admin = getSupabaseAdmin();
+        const { data, error } = await (admin || createSupabaseBrowserClient())
             .from('audit_logs')
             .select('*')
             .eq('resource_type', resourceType)
@@ -115,7 +118,8 @@ export async function getUserAuditLogs(
     limit: number = 100
 ): Promise<AuditLog[]> {
     try {
-        const { data, error } = await supabase
+        const admin = getSupabaseAdmin();
+        const { data, error } = await (admin || createSupabaseBrowserClient())
             .from('audit_logs')
             .select('*')
             .eq('user_id', userId)

@@ -8,12 +8,14 @@ interface GSAPButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
     children: React.ReactNode;
     className?: string;
     variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+    isLoading?: boolean;
 }
 
 export const GSAPButton: React.FC<GSAPButtonProps> = ({
     children,
     className,
     variant = 'primary',
+    isLoading,
     ...props
 }) => {
     const buttonRef = useRef<HTMLButtonElement>(null);
@@ -52,14 +54,18 @@ export const GSAPButton: React.FC<GSAPButtonProps> = ({
             className={cn(
                 "px-4 py-2 rounded-xl font-bold transition-colors flex items-center justify-center gap-2",
                 variantClasses[variant],
+                isLoading && "opacity-70 cursor-not-allowed",
                 className
             )}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
             onClick={handleClick}
+            disabled={isLoading || props.disabled}
             {...props}
         >
-            {children}
+            {isLoading ? (
+                <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            ) : children}
         </button>
     );
 };

@@ -1,11 +1,16 @@
-import { supabase } from "@/lib/supabase"
+import { createRequestClient } from "@/lib/supabase/server-client";
+import { getAuthenticatedUserFromRequest, AuthError } from "@/middleware/auth";
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
+        const user = await getAuthenticatedUserFromRequest(request);
+        const supabase = createRequestClient(user.accessToken);
+
         // Fetch real data for volume and AI rate
         const { data: events, error: eventsError } = await supabase
             .from('email_events')
-            .select('*');
+            .select('*')
+            .eq('tenant_id', user.tenant_id);
 
         if (eventsError) {
             return Response.json({ error: eventsError.message }, { status: 400 });
@@ -39,7 +44,10 @@ export async function GET() {
             }
         }, { status: 200 });
     } catch (error) {
-        console.error(error)
+        if (error instanceof AuthError) {
+            return Response.json({ error: error.message }, { status: error.status });
+        }
+        console.error('Analytics API error:', error);
         return Response.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Search, Building2, Check, Loader2, ArrowRight } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { cn } from '@/components/ui/dashboard-components';
+import { useDepartments } from '@/hooks/useDepartments';
 
 interface DepartmentSelectionDialogProps {
     isOpen: boolean;
@@ -11,6 +12,7 @@ interface DepartmentSelectionDialogProps {
     onSelect: (departmentId: string) => void;
     currentDepartmentId?: string;
     title?: string;
+    allowCurrentSelection?: boolean;
 }
 
 export const DepartmentSelectionDialog: React.FC<DepartmentSelectionDialogProps> = ({
@@ -18,32 +20,12 @@ export const DepartmentSelectionDialog: React.FC<DepartmentSelectionDialogProps>
     onClose,
     onSelect,
     currentDepartmentId,
-    title = "Escalate to Team"
+    title = "Escalate to Team",
+    allowCurrentSelection = false
 }) => {
-    const [departments, setDepartments] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-
-    useEffect(() => {
-        if (isOpen) {
-            fetchDepartments();
-        }
-    }, [isOpen]);
-
-    const fetchDepartments = async () => {
-        setIsLoading(true);
-        try {
-            const response = await fetch('/api/departments');
-            const json = await response.json();
-            if (json.data) {
-                setDepartments(json.data);
-            }
-        } catch (error) {
-            console.error('Failed to fetch departments:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    const { data: rawData, isLoading } = useDepartments();
+    const departments = rawData?.data || [];
 
     const filteredDepartments = departments.filter(dept =>
         dept.name?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -79,15 +61,15 @@ export const DepartmentSelectionDialog: React.FC<DepartmentSelectionDialogProps>
                                 <button
                                     key={dept.id}
                                     onClick={() => {
-                                        if (!isCurrent) {
+                                        if (!isCurrent || allowCurrentSelection) {
                                             onSelect(dept.id);
                                             onClose();
                                         }
                                     }}
-                                    disabled={isCurrent}
+                                    disabled={isCurrent && !allowCurrentSelection}
                                     className={cn(
                                         "w-full flex items-center gap-3 p-3 rounded-xl transition-all group",
-                                        isCurrent
+                                        isCurrent && !allowCurrentSelection
                                             ? "bg-zinc-900/50 border border-zinc-800/50 opacity-60 cursor-not-allowed"
                                             : "hover:bg-zinc-900 border border-transparent hover:border-zinc-800"
                                     )}
@@ -112,7 +94,7 @@ export const DepartmentSelectionDialog: React.FC<DepartmentSelectionDialogProps>
                                             )}
                                         </div>
                                         <div className="text-xs text-zinc-500 truncate">
-                                            {isCurrent ? "Already in this department" : "Move escalation to this team"}
+                                            {isCurrent ? "Current Department" : "Select this team"}
                                         </div>
                                     </div>
                                     {isCurrent ? (

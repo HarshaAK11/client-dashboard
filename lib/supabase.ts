@@ -1,6 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export { createSupabaseBrowserClient } from './supabase/client';
+// DO NOT export a singleton supabase client here.
+// API routes must use createRequestClient from @/lib/supabase/server-client.

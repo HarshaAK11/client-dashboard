@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Search, User, Check, Loader2 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { cn } from '@/components/ui/dashboard-components';
+import { useUsers } from '@/hooks/useUsers';
 
 interface UserSelectionDialogProps {
     isOpen: boolean;
@@ -20,30 +21,9 @@ export const UserSelectionDialog: React.FC<UserSelectionDialogProps> = ({
     currentAssigneeId,
     title = "Select User"
 }) => {
-    const [users, setUsers] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-
-    useEffect(() => {
-        if (isOpen) {
-            fetchUsers();
-        }
-    }, [isOpen]);
-
-    const fetchUsers = async () => {
-        setIsLoading(true);
-        try {
-            const response = await fetch('/api/team');
-            const json = await response.json();
-            if (json.data) {
-                setUsers(json.data);
-            }
-        } catch (error) {
-            console.error('Failed to fetch users:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    const { data: rawData, isLoading } = useUsers();
+    const users = rawData?.data || [];
 
     const filteredUsers = users.filter(user =>
         user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||

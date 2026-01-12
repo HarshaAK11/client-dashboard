@@ -15,9 +15,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Email Control Plane",
+  title: "Stemlyn",
   description: "Multi-tenant AI email automation dashboard",
+  icons: {
+    icon: '/logo.png',
+  },
 };
+
+import Providers from "./providers";
 
 export default function RootLayout({
   children,
@@ -29,11 +34,13 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <UserProvider>
-          <ToastProvider>
-            {children}
-          </ToastProvider>
-        </UserProvider>
+        <Providers>
+          <UserProvider>
+            <ToastProvider>
+              {children}
+            </ToastProvider>
+          </UserProvider>
+        </Providers>
       </body>
     </html>
   );

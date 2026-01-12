@@ -1,7 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createSupabaseBrowserClient } from '@/lib/supabase';
+import { isDevMode, getDevMockUser } from '@/lib/dev-auth';
 
 export type Role = 'admin' | 'manager' | 'agent';
 
@@ -10,6 +11,7 @@ export interface User {
     email: string;
     role: Role;
     tenant_id: string;
+    tenant_name: string;
     department_id?: string;
     full_name: string;
 }
@@ -25,67 +27,80 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
+// Initialize the browser client once for the client-side context
+const supabase = createSupabaseBrowserClient();
+
 export function UserProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [devRole, setDevRole] = useState<Role | null>(null);
     const [loading, setLoading] = useState(true);
 
-    const isDev = process.env.NEXT_PUBLIC_DEV_MODE === 'true';
+    const isDev = isDevMode;
 
     useEffect(() => {
-        // Check active session on mount
-        checkUser();
+        let isMounted = true;
 
         // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (!isMounted) return;
+
             if (session) {
-                fetchUserData(session.user.id);
+                console.log(`🔐 Auth: Event [${event}]. Fetching user data for ${session.user.email}`);
+                await fetchUserData(session.user.email!);
             } else {
-                setUser(null);
+                if (isDev) {
+                    console.warn(`🚧 Auth: Event [${event}]. No session. Falling back to DEV MOCK.`);
+                    setUser(getDevMockUser());
+                } else {
+                    console.log(`🔐 Auth: Event [${event}]. No session. User is null.`);
+                    setUser(null);
+                }
                 setLoading(false);
             }
         });
 
-        return () => subscription.unsubscribe();
+        return () => {
+            isMounted = false;
+            subscription.unsubscribe();
+        };
     }, []);
 
+    // Removed redundant checkUser() as onAuthStateChange fires INITIAL_SESSION in v2
+
+    // checkUser is now handled by onAuthStateChange(INITIAL_SESSION)
+    // but kept as a no-op to avoid breaking other potential calls
     async function checkUser() {
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) {
-                await fetchUserData(session.user.id);
-            } else {
-                setLoading(false);
-            }
-        } catch (error) {
-            console.error('Error checking user:', error);
-            setLoading(false);
-        }
+        // No-op
     }
 
-    async function fetchUserData(userId: string) {
+    async function fetchUserData(email: string) {
         try {
+            // Query by email which is the reliable unique identifier in this schema
             const { data, error } = await supabase
                 .from('users')
                 .select('id, email, role, tenant_id, department_id, full_name')
-                .eq('id', userId)
-                .single();
+                .eq('email', email)
+                .maybeSingle();
 
             if (error) throw error;
 
-            setUser(data as User);
+            if (!data) {
+                console.error(`User profile not found for email: ${email}`);
+                throw new Error('User not found in database');
+            }
+
+            setUser({
+                id: data.id,
+                email: data.email,
+                role: data.role as Role,
+                tenant_id: data.tenant_id,
+                department_id: data.department_id,
+                full_name: data.full_name,
+                tenant_name: 'Tenant', // Placeholder or fetch separately if needed
+            });
         } catch (error) {
             console.error('Error fetching user data:', error);
-            // If user doesn't exist in public.users, create a mock user for development
-            if (isDev) {
-                setUser({
-                    id: userId,
-                    email: 'dev@example.com',
-                    role: 'admin',
-                    tenant_id: 'dev-tenant',
-                    full_name: 'Development User',
-                });
-            }
+            setUser(null);
         } finally {
             setLoading(false);
         }
@@ -104,8 +119,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             const { data: userData } = await supabase
                 .from('users')
                 .select('role')
-                .eq('id', data.user.id)
-                .single();
+                .eq('auth_user_id', data.user.id)
+                .maybeSingle();
 
             // Store role snapshot in session metadata
             if (userData) {
@@ -114,42 +129,57 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 });
             }
 
-            await fetchUserData(data.user.id);
-        } catch (error) {
+            await fetchUserData(data.user.email!);
+            // If a real user signs in, clear any dev-only role override
+            setDevRole(null);
+        } catch (error: any) {
             console.error('Error signing in:', error);
+
+            // Provide clearer error for network/connectivity problems
+            const networkMsg = 'Failed to reach Supabase. Check that your Supabase instance is running and that NEXT_PUBLIC_SUPABASE_URL in .env.local is correct.';
+            const errMsg = String(error?.message || error?.name || '').toLowerCase();
+            const isNetwork = errMsg.includes('fetch') || errMsg.includes('connectionrefused') || errMsg.includes('ecoff') || errMsg.includes('authretryablefetcherror');
+
+            // No mock fallback here - signIn is for real authentication only
+            if (isNetwork) {
+                throw new Error(`${networkMsg} (${error?.message || error?.name})`);
+            }
+
             throw error;
         }
     }
 
     async function signOut() {
         try {
-            await supabase.auth.signOut();
+            // Create a race between the actual signOut and a timeout
+            // This ensures we don't hang forever if the network is down
+            const signOutPromise = supabase.auth.signOut();
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('SignOut timeout')), 5000)
+            );
+
+            await Promise.race([signOutPromise, timeoutPromise]);
+        } catch (error) {
+            console.error('Error signing out (or timeout):', error);
+            // We ignore the error and proceed to clear local state
+            // forcing a "logout" from the UI perspective
+        } finally {
+            // ALWAYS clear local state
             setUser(null);
             setDevRole(null);
-        } catch (error) {
-            console.error('Error signing out:', error);
-            throw error;
+            setLoading(false);
         }
     }
 
-    // Development mode: override role without changing database
-    // If user is null but devRole is set, create a mock user
-    const effectiveUser = isDev && devRole
-        ? (user
-            ? { ...user, role: devRole }
-            : {
-                id: 'dev-mock-user',
-                email: 'dev@example.com',
-                role: devRole,
-                tenant_id: 'dev-tenant',
-                full_name: 'Dev User',
-                department_id: devRole === 'manager' ? 'dev-dept-001' : undefined
-            } as User)
-        : user;
-
-    const devOverrideRole = isDev
+    // Development mode: override role only for authenticated users
+    // Dev role switcher requires a user (mock or real)
+    const devOverrideRole = isDev && user
         ? (role: Role) => setDevRole(role)
         : undefined;
+
+    const effectiveUser = user && isDev && devRole
+        ? { ...user, role: devRole }
+        : user;
 
     return (
         <UserContext.Provider

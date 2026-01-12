@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
     BarChart,
     Bar,
@@ -47,18 +47,28 @@ import {
 import { GSAPButton } from '@/components/ui/gsap-button';
 import { useAuth } from '@/contexts/UserContext';
 import { permissions } from '@/lib/permissions';
+import { useEmails } from '@/hooks/useEmails';
+import { useEscalations } from '@/hooks/useEscalations';
 
 export default function UnifiedDashboard() {
     const { user, loading } = useAuth();
 
-    // Shared state
-    const [mailData, setMailData] = useState<any[]>([]);
-    const [stats, setStats] = useState({
-        total: 0,
-        aiCount: 0,
-        automationRate: 0
-    });
-    const [escalatedMails, setEscalatedMails] = useState(0);
+    // Derived state from React Query
+    const { data: emailsData, isLoading: emailsLoading } = useEmails();
+    const { data: escalationsData, isLoading: escalationsLoading } = useEscalations();
+
+    const mailData = emailsData?.data || [];
+    const escalatedMails = escalationsData?.data?.filter((item: any) => item.current_state === 'needs_attention').length || 0;
+
+    const stats = useMemo(() => {
+        const data = mailData;
+        const aiCount = data.filter((item: any) => item.handled_by === 'ai').length;
+        const total = data.length;
+        const automationRate = total > 0 ? (aiCount / total) * 100 : 0;
+        return { total, aiCount, automationRate };
+    }, [mailData]);
+
+    const isLoading = loading || emailsLoading || escalationsLoading;
 
     // Calculate volume trends from real data (Last 7 days)
     const dynamicVolumeData = React.useMemo(() => {
@@ -101,38 +111,7 @@ export default function UnifiedDashboard() {
         }));
     }, [mailData]);
 
-    // Fetch data from API
-    useEffect(() => {
-        fetch('/api/emails')
-            .then(res => res.json())
-            .then(json => {
-                if (json.data) {
-                    const data = json.data;
-                    const aiCount = data.filter((item: any) => item.handled_by === 'ai').length;
-                    const total = data.length;
-                    const rate = total > 0 ? (aiCount / total) * 100 : 0;
 
-                    setMailData(data);
-                    setStats({
-                        total,
-                        aiCount,
-                        automationRate: rate
-                    });
-                }
-            })
-            .catch(err => console.error('Error fetching dashboard data:', err));
-
-        fetch('/api/escalations')
-            .then(res => res.json())
-            .then(json => {
-                if (json.data) {
-                    const data = json.data
-                    const escalatedMails = data.filter((item: any) => item.current_state === 'needs_attention').length
-                    setEscalatedMails(escalatedMails)
-                }
-            })
-            .catch(err => console.error('Error fetching dashboard data:', err));
-    }, []);
 
     const automationData = [
         { name: 'AI Handled', value: stats.aiCount, color: '#10b981' },
@@ -186,7 +165,7 @@ export default function UnifiedDashboard() {
         },
     ];
 
-    if (loading) {
+    if (isLoading) {
         return (
             <div className="flex items-center justify-center h-96">
                 <div className="text-zinc-500">Loading dashboard...</div>

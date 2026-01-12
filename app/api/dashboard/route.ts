@@ -1,5 +1,5 @@
-import { supabase } from "@/lib/supabase";
-import { getAuthenticatedUser } from "@/middleware/auth";
+import { createRequestClient } from "@/lib/supabase/server-client";
+import { getAuthenticatedUserFromRequest, AuthError } from "@/middleware/auth";
 import { logAccess } from "@/lib/audit";
 
 /**
@@ -12,25 +12,8 @@ import { logAccess } from "@/lib/audit";
  */
 export async function GET(request: Request) {
     try {
-        // Note: In development mode without real auth, this will fail
-        // For now, we'll return all data if auth fails (dev mode)
-        let user;
-        try {
-            user = await getAuthenticatedUser(request);
-        } catch (authError) {
-            // Development mode: return all data
-            console.warn('Auth failed, returning all data (dev mode)');
-            const { data, error } = await supabase
-                .from('email_events')
-                .select('*')
-                .order('created_at', { ascending: false });
-
-            if (error) {
-                return Response.json({ error: error.message }, { status: 400 });
-            }
-
-            return Response.json({ data }, { status: 200 });
-        }
+        const user = await getAuthenticatedUserFromRequest(request);
+        const supabase = createRequestClient(user.accessToken);
 
         // Build query based on role
         let query = supabase.from('email_events').select('*');
@@ -66,6 +49,7 @@ export async function GET(request: Request) {
             resourceId: 'dashboard',
             endpoint: '/api/dashboard',
             request,
+            tenantId: user.tenant_id,
             metadata: {
                 count: data.length,
                 role: user.role,
@@ -74,6 +58,9 @@ export async function GET(request: Request) {
 
         return Response.json({ data }, { status: 200 });
     } catch (error) {
+        if (error instanceof AuthError) {
+            return Response.json({ error: error.message }, { status: error.status });
+        }
         console.error('Dashboard API error:', error);
         return Response.json({ error: "Internal Server Error" }, { status: 500 });
     }

@@ -14,7 +14,8 @@ import {
     Search,
     ChevronRight,
     Info,
-    MessageSquare
+    MessageSquare,
+    InboxIcon
 } from 'lucide-react';
 import {
     Table,
@@ -32,6 +33,9 @@ import { ConfirmationDialog } from './confirmation-dialog';
 import { GSAPButton } from '@/components/ui/gsap-button';
 import { gsapAnimations } from '@/lib/gsap-animations';
 import gsap from 'gsap';
+import { useEscalations } from '@/hooks/useEscalations';
+import { useAuth } from '@/contexts/UserContext';
+import { authFetch } from '@/lib/api-client';
 
 const GSAPMenu = ({
     isOpen,
@@ -72,113 +76,52 @@ const GSAPMenu = ({
     );
 };
 
-// Mock Data for Escalations
-const mockEscalations = [
-    {
-        id: '1',
-        summary: "Customer requesting immediate refund for multi-year enterprise contract.",
-        reason: "Policy Violation Check",
-        priority: "critical",
-        department: "Billing",
-        assignedTo: "Unassigned",
-        assignedToId: "Unassigned",
-        escalatedAt: new Date(Date.now() - 1000 * 60 * 12), // 12 mins ago
-        slaDeadline: new Date(Date.now() + 1000 * 60 * 18), // 18 mins left
-        confidence: 0.42,
-        aiReason: "Escalated due to low confidence (0.42) and missing invoice number.",
-        subject: "Refund Request: Enterprise Contract",
-        content: "I need a full refund for our enterprise plan. We are moving to a different provider and the current service doesn't meet our needs as discussed in the contract section 4.2.",
-        source: "gmail",
-        externalThreadId: "thread-id-1",
-        externalMessageId: "msg-id-1"
-    },
-    {
-        id: '2',
-        summary: "Technical issue with API v4 integration for high-volume client.",
-        reason: "AI confidence below threshold",
-        priority: "high",
-        department: "Technical Ops",
-        assignedTo: "Alex Rivera",
-        assignedToId: "alex-rivera-uuid",
-        escalatedAt: new Date(Date.now() - 1000 * 60 * 45), // 45 mins ago
-        slaDeadline: new Date(Date.now() - 1000 * 60 * 15), // Breached 15 mins ago
-        confidence: 0.58,
-        aiReason: "AI unsure about specific API v4 error codes mentioned in the thread.",
-        subject: "API v4 Integration Failure - Error 500.42",
-        content: "Our integration is failing with error code 500.42. This is impacting our production traffic. Please advise immediately.",
-        source: "outlook",
-        externalThreadId: "thread-id-2",
-        externalMessageId: "msg-id-2"
-    },
-    {
-        id: '3',
-        summary: "Angry tone detected in feedback regarding recent downtime.",
-        reason: "Angry or abusive tone detected",
-        priority: "medium",
-        department: "Customer Support",
-        assignedTo: "Sarah Chen",
-        assignedToId: "sarah-chen-uuid",
-        escalatedAt: new Date(Date.now() - 1000 * 60 * 5), // 5 mins ago
-        slaDeadline: new Date(Date.now() + 1000 * 60 * 55), // 55 mins left
-        confidence: 0.85,
-        aiReason: "Sentiment analysis detected high frustration levels and urgent keywords.",
-        subject: "URGENT: Service Downtime Complaint",
-        content: "This is the third time this week the service has been down! This is completely unacceptable and I'm losing money every minute you're offline!",
-        source: "gmail",
-        externalThreadId: "thread-id-3",
-        externalMessageId: "msg-id-3"
-    }
-];
-
 export default function EscalationsView({ role }: { role: string }) {
-    const [escalations, setEscalations] = useState<any[]>(() => {
-        // Role-based filtering logic for mock data
-        if (role === 'admin') return mockEscalations;
-        if (role === 'manager') {
-            return mockEscalations.filter(e => e.department === 'Billing' || e.department === 'Customer Support');
-        }
-        return mockEscalations.filter(e => e.assignedTo === 'Sarah Chen');
-    });
-
-    useEffect(() => {
-        fetch('/api/escalations')
-            .then(response => response.json())
-            .then(json => {
-                if (json.data) {
-                    const data = json.data.map((item: any) => ({
-                        ...item,
-                        escalatedAt: new Date(item.escalatedAt),
-                        slaDeadline: new Date(item.slaDeadline),
-                        assignedTo: item.assignedTo,
-                        assignedToId: item.assignedToId
-                    }))
-                    setEscalations(data)
-                }
-            })
-    }, [])
-
+    // const [escalations, setEscalations] = useState<any[]>([]); // Removed in favor of React Query
+    // const [isLoading, setIsLoading] = useState(true); // Removed in favor of React Query
     const [selectedEscalation, setSelectedEscalation] = useState<any>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const { showToast } = useToast();
+    const { data: rawData, isLoading, refetch } = useEscalations();
 
-    // User Selection Dialog State
+    // Transform data
+    const escalations = useMemo(() => {
+        if (!rawData?.data) return [];
+        return rawData.data.map((item: any) => ({
+            ...item,
+            escalatedAt: new Date(item.escalatedAt),
+            slaDeadline: new Date(item.slaDeadline),
+        }));
+    }, [rawData]);
+
+    // Dialog States
     const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
     const [userDialogTarget, setUserDialogTarget] = useState<any>(null);
-
-    // Department Selection Dialog State
     const [isDepartmentDialogOpen, setIsDepartmentDialogOpen] = useState(false);
     const [departmentDialogTarget, setDepartmentDialogTarget] = useState<any>(null);
-
-    // Confirmation Dialog State
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
     const [confirmDialogTarget, setConfirmDialogTarget] = useState<any>(null);
     const [isActionLoading, setIsActionLoading] = useState(false);
+
+    // Side Panel States
     const [shouldRenderPanel, setShouldRenderPanel] = useState(false);
     const [displayEscalation, setDisplayEscalation] = useState<any>(null);
     const panelBackdropRef = useRef<HTMLDivElement>(null);
     const panelRef = useRef<HTMLDivElement>(null);
 
-    // Sync shouldRenderPanel with selectedEscalation
+    const { user } = useAuth();
+    const MOCK_USER_ID = user?.id || 'sarah-chen-uuid';
+
+    // Fetch Data
+    // Fetch Data logic removed in favor of React Query hook
+
+    const [activeTab, setActiveTab] = useState<'needs_action' | 'in_progress' | 'resolved'>('needs_action');
+
+    // ... (keep existing useEffects)
+
+
+
+    // Sync Side Panel
     useEffect(() => {
         if (selectedEscalation) {
             setDisplayEscalation(selectedEscalation);
@@ -196,30 +139,24 @@ export default function EscalationsView({ role }: { role: string }) {
         }
     }, [selectedEscalation]);
 
-    // Animate panel in
     useEffect(() => {
         if (shouldRenderPanel && selectedEscalation && panelBackdropRef.current && panelRef.current) {
             gsapAnimations.panelIn(panelBackdropRef.current, panelRef.current);
         }
     }, [shouldRenderPanel, selectedEscalation]);
 
-    // Handle scroll lock when details panel is open
     useEffect(() => {
         if (selectedEscalation) {
             document.body.style.overflow = 'hidden';
         } else {
             document.body.style.overflow = 'unset';
         }
-        return () => {
-            document.body.style.overflow = 'unset';
-        };
+        return () => { document.body.style.overflow = 'unset'; };
     }, [selectedEscalation]);
 
-    const CURRENT_USER = "Sarah Chen"; // Mock current user
-    const MOCK_USER_ID = process.env.NEXT_PUBLIC_MOCK_USER_ID || 'sarah-chen-uuid';
-
+    // Helpers
     const getPriorityColor = (priority: string) => {
-        switch (priority.toLowerCase()) {
+        switch (priority?.toLowerCase()) {
             case 'critical': return 'text-rose-500 bg-rose-500/10 border-rose-500/20';
             case 'high': return 'text-amber-500 bg-amber-500/10 border-amber-500/20';
             case 'medium': return 'text-blue-500 bg-blue-500/10 border-blue-500/20';
@@ -240,100 +177,60 @@ export default function EscalationsView({ role }: { role: string }) {
         return `${diff}m`;
     };
 
-    const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
-    const [activeAssignMenuId, setActiveAssignMenuId] = useState<string | null>(null);
-    const [isReasonFilterOpen, setIsReasonFilterOpen] = useState(false);
-    const [selectedReasons, setSelectedReasons] = useState<Set<string>>(new Set());
-    const [isPriorityFilterOpen, setIsPriorityFilterOpen] = useState(false);
-    const [selectedPriorities, setSelectedPriorities] = useState<Set<string>>(new Set());
-
-    // Reason Categories
-    const reasonCategories = {
-        "SLA & Time": ["sla_breach_risk", "sla_breached"],
-        "Sentiment": ["negative_sentiment", "hostile_language", "complaint_detected"],
-        "AI / System": ["ai_confidence_low", "classification_failed", "ambiguous_request"],
-        "Business Critical": ["payment_or_billing_issue", "legal_or_compliance", "service_outage"],
-        "Human Signals": ["explicit_human_request", "previous_ai_failed"]
-    };
-
-    const priorities = ["critical", "high", "medium", "low"];
-
-    // Close menu when clicking outside
-    useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (activeMenuId && !(e.target as Element).closest('.action-menu')) {
-                setActiveMenuId(null);
-            }
-            if (activeAssignMenuId && !(e.target as Element).closest('.assign-menu')) {
-                setActiveAssignMenuId(null);
-            }
-            if (isReasonFilterOpen && !(e.target as Element).closest('.reason-filter')) {
-                setIsReasonFilterOpen(false);
-            }
-            if (isPriorityFilterOpen && !(e.target as Element).closest('.priority-filter')) {
-                setIsPriorityFilterOpen(false);
-            }
-        };
-        document.addEventListener('click', handleClickOutside);
-        return () => document.removeEventListener('click', handleClickOutside);
-    }, [activeMenuId, activeAssignMenuId, isReasonFilterOpen, isPriorityFilterOpen]);
-
+    // Actions
     const handleAction = async (action: string, item: any, payload: any = {}) => {
-        // Prompt for required inputs
+        if (action === 'pending_resolution') {
+            setIsActionLoading(true);
+            try {
+                const response = await authFetch(`/api/email-events/${item.id}/pending-resolution`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || 'Action failed');
+
+                showToast('Resolution intent set. Redirecting to email...', 'success');
+
+                // Provider-aware redirect
+                handleRedirect(item);
+
+                await refetch();
+                setSelectedEscalation(null);
+            } catch (error: any) {
+                showToast(error.message || 'Failed to set resolution intent', 'error');
+            } finally {
+                setIsActionLoading(false);
+            }
+            return;
+        }
+
         if (action === 'escalate_department') {
             setDepartmentDialogTarget(item);
             setIsDepartmentDialogOpen(true);
-            return; // Dialog will handle the action
+            return;
+        } else if (action === 'false_escalation') {
+            setConfirmDialogTarget(item);
+            setIsConfirmDialogOpen(true);
+            return;
         } else if (action === 'snooze') {
             const minutes = prompt("Snooze for how many minutes?", "60");
             if (!minutes) return;
             payload.until = new Date(Date.now() + parseInt(minutes) * 60000).toISOString();
-        } else if (action === 'ai_override') {
-            const reason = prompt("Enter new escalation reason:");
-            if (!reason) return;
-            payload.reason = reason;
-        } else if (action === 'false_escalation') {
-            setConfirmDialogTarget(item);
-            setIsConfirmDialogOpen(true);
-            return; // Dialog will handle the action
         }
 
         setIsActionLoading(true);
         try {
-            const response = await fetch('/api/escalations/actions', {
+            const response = await authFetch('/api/escalations/actions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action,
-                    eventId: item.id,
-                    payload
-                })
+                body: JSON.stringify({ action, eventId: item.id, payload })
             });
-
             const result = await response.json();
-
             if (!response.ok) throw new Error(result.error || 'Action failed');
-
             showToast(result.message || `Action ${action} completed`, 'success');
-
-            // Refresh data
-            const res = await fetch('/api/escalations');
-            const json = await res.json();
-            if (json.data) {
-                const data = json.data.map((item: any) => ({
-                    ...item,
-                    escalatedAt: new Date(item.escalatedAt),
-                    slaDeadline: new Date(item.slaDeadline),
-                    assignedTo: item.assignedTo,
-                    assignedToId: item.assignedToId
-                }));
-                setEscalations(data);
-                setSelectedEscalation(null); // Close panel
-                setActiveMenuId(null); // Close menu
-                setActiveAssignMenuId(null); // Close assign menu
-            }
+            await refetch();
+            setSelectedEscalation(null);
         } catch (error: any) {
-            console.error('Action error:', error);
             showToast(error.message || 'Failed to perform action', 'error');
         } finally {
             setIsActionLoading(false);
@@ -342,91 +239,83 @@ export default function EscalationsView({ role }: { role: string }) {
 
     const handleRedirect = (item: any) => {
         const { source, externalMessageId, externalThreadId } = item;
-        let url = '';
+        console.log("Redirecting for item:", { source, externalMessageId, externalThreadId });
 
-        if (source === 'gmail' && externalThreadId) {
-            url = `https://mail.google.com/mail/u/0/#all/${externalThreadId}`;
-        } else if (source === 'outlook' && externalMessageId) {
-            url = `https://outlook.office.com/mail/deeplink?ItemID=${encodeURIComponent(externalMessageId)}`;
+        let url = '';
+        if (source === 'gmail') {
+            url = `https://mail.google.com/mail/u/0/#inbox/${externalMessageId}`;
+        } else if (source === 'outlook') {
+            url = `https://outlook.office.com/mail/deeplink?messageid=${externalMessageId}`;
         }
 
         if (url) {
             window.open(url, '_blank');
         } else {
-            showToast('Could not construct redirect URL. Missing source or ID.', 'error');
+            showToast('External link not available', 'error');
         }
     };
 
-    const toggleReason = (reason: string) => {
-        const newSelected = new Set(selectedReasons);
-        if (newSelected.has(reason)) {
-            newSelected.delete(reason);
-        } else {
-            newSelected.add(reason);
-        }
-        setSelectedReasons(newSelected);
-    };
+    const filteredEscalations = useMemo(() => {
+        return escalations.filter(item => {
+            const matchesSearch = item.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                item.content?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const toggleCategory = (category: string) => {
-        const categoryReasons = reasonCategories[category as keyof typeof reasonCategories];
-        const allSelected = categoryReasons.every(r => selectedReasons.has(r));
-
-        const newSelected = new Set(selectedReasons);
-        if (allSelected) {
-            categoryReasons.forEach(r => newSelected.delete(r));
-        } else {
-            categoryReasons.forEach(r => newSelected.add(r));
-        }
-        setSelectedReasons(newSelected);
-    };
-
-    const togglePriority = (priority: string) => {
-        const newSelected = new Set(selectedPriorities);
-        if (newSelected.has(priority)) {
-            newSelected.delete(priority);
-        } else {
-            newSelected.add(priority);
-        }
-        setSelectedPriorities(newSelected);
-    };
-
-    const filteredEscalations = escalations.filter(e => {
-        const matchesSearch = e.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            e.reason.toLowerCase().includes(searchQuery.toLowerCase());
-
-        const matchesReason = selectedReasons.size === 0 || selectedReasons.has(e.reason);
-        const matchesPriority = selectedPriorities.size === 0 || selectedPriorities.has(e.priority.toLowerCase());
-
-        return matchesSearch && matchesReason && matchesPriority;
-    });
+            if (activeTab === 'needs_action') return matchesSearch && item.status === 'needs_attention';
+            if (activeTab === 'in_progress') return matchesSearch && item.status === 'in_progress';
+            if (activeTab === 'resolved') return matchesSearch && item.status === 'handled';
+            return matchesSearch;
+        });
+    }, [escalations, searchQuery, activeTab]);
 
     return (
-        <div className="flex flex-col gap-8 relative min-h-[600px]">
-            {/* Header & Stats */}
+        <div className="flex flex-col gap-8">
+            {/* Header */}
             <div className="flex justify-between items-end">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Escalation Queue</h2>
+                    <h2 className="text-2xl font-bold tracking-tight">Escalations</h2>
                     <p className="text-zinc-500">Manage high-priority events requiring human intervention.</p>
                 </div>
-                <div className="flex gap-6">
-                    <div className="text-right">
-                        <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1">Unassigned</div>
-                        <div className="text-2xl font-bold text-rose-500">
-                            {escalations.filter(e => e.assignedTo === 'Unassigned').length}
-                        </div>
-                    </div>
-                    <div className="text-right">
-                        <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1">Stuck {'>'} 30m</div>
-                        <div className="text-2xl font-bold text-amber-500">
-                            {escalations.filter(e => (Date.now() - e.escalatedAt.getTime()) > 1000 * 60 * 30).length}
-                        </div>
-                    </div>
+                <div className="flex gap-3">
+                    <GSAPButton variant="secondary" className="px-4 py-2">
+                        <Filter size={16} />
+                        Filters
+                    </GSAPButton>
                 </div>
             </div>
 
-            {/* Filters */}
-            <div className="flex gap-4 items-center">
-                <div className="relative flex-1">
+            {/* Tabs & Search */}
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
+                <div className="flex bg-zinc-900 p-1 rounded-xl border border-zinc-800 w-full md:w-auto">
+                    <button
+                        onClick={() => setActiveTab('needs_action')}
+                        className={cn(
+                            "flex-1 md:flex-none px-6 py-2 rounded-lg text-sm font-medium transition-all",
+                            activeTab === 'needs_action' ? "bg-zinc-800 text-zinc-50 shadow-lg" : "text-zinc-500 hover:text-zinc-300"
+                        )}
+                    >
+                        Needs Action
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('in_progress')}
+                        className={cn(
+                            "flex-1 md:flex-none px-6 py-2 rounded-lg text-sm font-medium transition-all",
+                            activeTab === 'in_progress' ? "bg-zinc-800 text-zinc-50 shadow-lg" : "text-zinc-500 hover:text-zinc-300"
+                        )}
+                    >
+                        In Progress
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('resolved')}
+                        className={cn(
+                            "flex-1 md:flex-none px-6 py-2 rounded-lg text-sm font-medium transition-all",
+                            activeTab === 'resolved' ? "bg-zinc-800 text-zinc-50 shadow-lg" : "text-zinc-500 hover:text-zinc-300"
+                        )}
+                    >
+                        Resolved
+                    </button>
+                </div>
+
+                <div className="relative w-full md:w-80">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
                     <input
                         type="text"
@@ -436,433 +325,355 @@ export default function EscalationsView({ role }: { role: string }) {
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
-
-                {/* Reason Filter */}
-                <div className="relative reason-filter">
-                    <button
-                        className={cn(
-                            "flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-zinc-800 transition-colors",
-                            isReasonFilterOpen && "border-emerald-500/50 ring-2 ring-emerald-500/10"
-                        )}
-                        onClick={() => {
-                            setIsReasonFilterOpen(!isReasonFilterOpen);
-                            setIsPriorityFilterOpen(false);
-                        }}
-                    >
-                        <Filter size={16} />
-                        Reason
-                        {selectedReasons.size > 0 && (
-                            <span className="bg-emerald-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                                {selectedReasons.size}
-                            </span>
-                        )}
-                    </button>
-
-                    <GSAPMenu isOpen={isReasonFilterOpen} className="absolute top-full mt-2 left-0 w-64 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl z-50 p-2 max-h-[400px] overflow-y-auto">
-                        {Object.entries(reasonCategories).map(([category, reasons]) => {
-                            const allSelected = reasons.every(r => selectedReasons.has(r));
-                            const someSelected = reasons.some(r => selectedReasons.has(r));
-                            return (
-                                <div key={category} className="mb-2 last:mb-0">
-                                    <button
-                                        className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-900 rounded-lg transition-colors group"
-                                        onClick={() => toggleCategory(category)}
-                                    >
-                                        <div className={cn(
-                                            "w-4 h-4 rounded border flex items-center justify-center transition-colors",
-                                            allSelected ? "bg-emerald-500 border-emerald-500" : someSelected ? "bg-emerald-500/50 border-emerald-500/50" : "border-zinc-700 group-hover:border-zinc-500"
-                                        )}>
-                                            {allSelected && <CheckCircle2 size={12} className="text-black" />}
-                                            {!allSelected && someSelected && <div className="w-2 h-0.5 bg-black rounded-full" />}
-                                        </div>
-                                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">{category}</span>
-                                    </button>
-                                    <div className="ml-4 mt-1 space-y-1">
-                                        {reasons.map(reason => (
-                                            <button
-                                                key={reason}
-                                                className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-900 rounded-lg transition-colors group"
-                                                onClick={() => toggleReason(reason)}
-                                            >
-                                                <div className={cn(
-                                                    "w-4 h-4 rounded border flex items-center justify-center transition-colors",
-                                                    selectedReasons.has(reason) ? "bg-emerald-500 border-emerald-500" : "border-zinc-700 group-hover:border-zinc-500"
-                                                )}>
-                                                    {selectedReasons.has(reason) && <CheckCircle2 size={12} className="text-black" />}
-                                                </div>
-                                                <span className="text-xs text-zinc-300">{reason.replace(/_/g, ' ')}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </GSAPMenu>
-                </div>
-
-                {/* Priority Filter */}
-                <div className="relative priority-filter">
-                    <button
-                        className={cn(
-                            "flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-zinc-800 transition-colors",
-                            isPriorityFilterOpen && "border-emerald-500/50 ring-2 ring-emerald-500/10"
-                        )}
-                        onClick={() => {
-                            setIsPriorityFilterOpen(!isPriorityFilterOpen);
-                            setIsReasonFilterOpen(false);
-                        }}
-                    >
-                        <ShieldAlert size={16} />
-                        Priority
-                        {selectedPriorities.size > 0 && (
-                            <span className="bg-emerald-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                                {selectedPriorities.size}
-                            </span>
-                        )}
-                    </button>
-
-                    <GSAPMenu isOpen={isPriorityFilterOpen} className="absolute top-full mt-2 right-0 w-48 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl z-50 p-2 overflow-hidden">
-                        {priorities.map(priority => (
-                            <div
-                                key={priority}
-                                className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer group"
-                                onClick={() => togglePriority(priority)}
-                            >
-                                <div className={cn(
-                                    "w-4 h-4 rounded border flex items-center justify-center transition-colors",
-                                    selectedPriorities.has(priority) ? "bg-emerald-500 border-emerald-500" : "border-zinc-700 group-hover:border-zinc-500"
-                                )}>
-                                    {selectedPriorities.has(priority) && <CheckCircle2 size={12} className="text-black" />}
-                                </div>
-                                <span className={cn(
-                                    "text-xs font-medium capitalize",
-                                    selectedPriorities.has(priority) ? "text-zinc-50" : "text-zinc-400"
-                                )}>
-                                    {priority}
-                                </span>
-                            </div>
-                        ))}
-                    </GSAPMenu>
-                </div>
             </div>
 
-            {/* Escalation Table */}
+            {/* Main Table */}
             <div className="card-gradient glass rounded-2xl border border-zinc-800/50 overflow-hidden">
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead className="w-[40%]">Email Summary</TableHead>
-                            <TableHead>Reason</TableHead>
+                            <TableHead>Escalation</TableHead>
                             <TableHead>Priority</TableHead>
-                            <TableHead>Assignee</TableHead>
-                            <TableHead>Time</TableHead>
-                            <TableHead>SLA</TableHead>
+                            <TableHead>Department</TableHead>
+                            <TableHead>Assigned To</TableHead>
+                            <TableHead>SLA Status</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filteredEscalations.map((item) => {
-                            const sla = getSLAStatus(item.slaDeadline);
-                            return (
-                                <TableRow key={item.id} className="group cursor-pointer" onClick={() => setSelectedEscalation(item)}>
+                        {isLoading ? (
+                            <TableRow>
+                                <TableCell colSpan={6} className="text-center py-20">
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                                        <p className="text-zinc-500 text-sm">Loading escalations...</p>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        ) : filteredEscalations.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={6} className="text-center py-20 text-zinc-500">
+                                    No escalations found in this category.
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            filteredEscalations.map((item) => (
+                                <TableRow
+                                    key={item.id}
+                                    className="group cursor-pointer hover:bg-zinc-900/50 transition-colors"
+                                    onClick={() => setSelectedEscalation(item)}
+                                >
                                     <TableCell>
                                         <div className="flex flex-col gap-1">
-                                            <span className="text-sm font-medium text-zinc-50 line-clamp-1">{item.summary}</span>
-                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{item.department}</span>
+                                            <div className="font-bold text-zinc-50 group-hover:text-emerald-400 transition-colors line-clamp-1">
+                                                {item.subject}
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs text-zinc-500">
+                                                <Clock size={12} />
+                                                <span>Escalated {getTimeSince(item.escalatedAt)} ago</span>
+                                            </div>
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <span className="text-xs text-zinc-400">{item.reason}</span>
-                                    </TableCell>
-                                    <TableCell>
                                         <span className={cn(
-                                            "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border",
+                                            "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border",
                                             getPriorityColor(item.priority)
                                         )}>
                                             {item.priority}
                                         </span>
                                     </TableCell>
+                                    <TableCell className="text-zinc-400 text-sm">
+                                        {item.department}
+                                    </TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-2">
-                                            <div className={cn(
-                                                "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
-                                                item.assignedTo === 'Unassigned' ? "bg-rose-500/20 text-rose-500" : "bg-zinc-800 text-zinc-400"
-                                            )}>
-                                                {item.assignedTo === 'Unassigned' ? '?' : item.assignedTo.charAt(0)}
+                                            <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[10px] text-zinc-400 font-bold">
+                                                {item.assignedTo?.charAt(0) || '?'}
                                             </div>
-                                            <span className={cn(
-                                                "text-xs",
-                                                item.assignedTo === 'Unassigned' ? "text-rose-500 font-medium" : "text-zinc-400"
-                                            )}>
-                                                {item.assignedTo}
-                                            </span>
+                                            <span className="text-sm text-zinc-300">{item.assignedTo}</span>
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <div className="flex items-center gap-1.5 text-zinc-500">
-                                            <Clock size={12} />
-                                            <span className="text-xs">{getTimeSince(item.escalatedAt)}</span>
+                                        <div className="flex flex-col gap-1">
+                                            <div className={cn("text-xs font-bold", getSLAStatus(item.slaDeadline).color)}>
+                                                {getSLAStatus(item.slaDeadline).label}
+                                            </div>
+                                            <div className="text-[10px] text-zinc-500">
+                                                Due {item.slaDeadline.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
                                         </div>
                                     </TableCell>
-                                    <TableCell>
-                                        <span className={cn("text-xs font-bold", sla.color)}>
-                                            {sla.label}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className="text-right" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                                        <div className="flex justify-end gap-2 items-center relative">
-                                            <button
-                                                className="p-2 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-500"
-                                                title="View Details"
-                                                onClick={() => setSelectedEscalation(item)}
+                                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex justify-end gap-2">
+                                            <GSAPButton
+                                                variant="secondary"
+                                                className="p-2 rounded-lg"
+                                                onClick={() => handleAction('pending_resolution', item)}
                                             >
-                                                <ExternalLink size={16} />
-                                            </button>
-
-                                            {/* Assignment Dropdown */}
-                                            <div className="relative assign-menu">
-                                                <button
-                                                    className={cn(
-                                                        "p-2 hover:bg-zinc-800 rounded-lg transition-colors",
-                                                        item.assignedToId === MOCK_USER_ID ? "text-zinc-600 cursor-not-allowed" : "text-emerald-500"
-                                                    )}
-                                                    title={item.assignedToId === MOCK_USER_ID ? "Assigned to you" : "Assign / Reassign"}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        if (item.assignedToId !== MOCK_USER_ID) {
-                                                            setActiveAssignMenuId(activeAssignMenuId === item.id ? null : item.id);
-                                                            setActiveMenuId(null); // Close other menu
-                                                        }
-                                                    }}
-                                                    disabled={item.assignedToId === MOCK_USER_ID}
-                                                >
-                                                    {item.assignedToId === MOCK_USER_ID ? <CheckCircle2 size={16} /> : <UserPlus size={16} />}
-                                                </button>
-
-                                                <GSAPMenu isOpen={activeAssignMenuId === item.id} className="absolute right-0 mt-2 w-48 bg-zinc-950 border border-zinc-800 rounded-xl shadow-xl z-50 overflow-hidden flex flex-col">
-                                                    {item.assignedTo === 'Unassigned' ? (
-                                                        <>
-                                                            <button
-                                                                className="px-4 py-3 text-left text-sm text-zinc-300 hover:bg-zinc-900 hover:text-white transition-colors border-b border-zinc-900"
-                                                                onClick={(e) => { e.stopPropagation(); handleAction('assign', item, { assigneeId: MOCK_USER_ID }); }}
-                                                            >
-                                                                Assign to me
-                                                            </button>
-                                                            <button
-                                                                className="px-4 py-3 text-left text-sm text-zinc-300 hover:bg-zinc-900 hover:text-white transition-colors"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setUserDialogTarget(item);
-                                                                    setIsUserDialogOpen(true);
-                                                                    setActiveAssignMenuId(null);
-                                                                }}
-                                                            >
-                                                                Assign...
-                                                            </button>
-                                                        </>
-                                                    ) : (
-                                                        <button
-                                                            className="px-4 py-3 text-left text-sm text-zinc-300 hover:bg-zinc-900 hover:text-white transition-colors"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setUserDialogTarget(item);
-                                                                setIsUserDialogOpen(true);
-                                                                setActiveAssignMenuId(null);
-                                                            }}
-                                                        >
-                                                            Reassign
-                                                        </button>
-                                                    )}
-                                                </GSAPMenu>
-                                            </div>
-
-                                            <div className="relative action-menu">
-                                                <button
-                                                    className="p-2 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-500"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setActiveMenuId(activeMenuId === item.id ? null : item.id);
-                                                        setActiveAssignMenuId(null); // Close assign menu
-                                                    }}
-                                                >
-                                                    <MoreVertical size={16} />
-                                                </button>
-                                                <GSAPMenu isOpen={activeMenuId === item.id} className="absolute right-0 mt-2 w-48 bg-zinc-950 border border-zinc-800 rounded-xl shadow-xl z-50 overflow-hidden flex flex-col">
-                                                    <button
-                                                        className="px-4 py-3 text-left text-sm text-zinc-300 hover:bg-zinc-900 hover:text-white transition-colors border-b border-zinc-900"
-                                                        onClick={(e) => { e.stopPropagation(); handleAction('escalate_department', item); }}
-                                                    >
-                                                        Escalate to Team
+                                                <CheckCircle2 size={18} className="text-emerald-500" />
+                                            </GSAPButton>
+                                            <Dropdown>
+                                                <DropdownTrigger>
+                                                    <button className="p-2 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-500">
+                                                        <MoreVertical size={18} />
                                                     </button>
-                                                    <button
-                                                        className="px-4 py-3 text-left text-sm text-zinc-300 hover:bg-zinc-900 hover:text-white transition-colors border-b border-zinc-900"
-                                                        onClick={(e) => { e.stopPropagation(); handleRedirect(item); }}
-                                                    >
-                                                        Redirect
-                                                    </button>
-                                                    <button
-                                                        className="px-4 py-3 text-left text-sm text-rose-500 hover:bg-rose-500/10 transition-colors"
-                                                        onClick={(e) => { e.stopPropagation(); handleAction('false_escalation', item); }}
-                                                    >
-                                                        Mark False Escalation
-                                                    </button>
-                                                </GSAPMenu>
-                                            </div>
+                                                </DropdownTrigger>
+                                                <DropdownContent>
+                                                    <DropdownItem onClick={() => handleAction('escalate_department', item)}>
+                                                        Re-route Department
+                                                    </DropdownItem>
+                                                    <DropdownItem onClick={() => handleAction('false_escalation', item)}>
+                                                        Mark as False Escalation
+                                                    </DropdownItem>
+                                                    <DropdownItem onClick={() => handleAction('snooze', item)}>
+                                                        Snooze
+                                                    </DropdownItem>
+                                                </DropdownContent>
+                                            </Dropdown>
                                         </div>
                                     </TableCell>
                                 </TableRow>
-                            );
-                        })}
+                            ))
+                        )}
                     </TableBody>
                 </Table>
             </div>
 
-            {/* Context Panel (Side Sheet) */}
+            {/* Side Panel (Detail View) */}
             {shouldRenderPanel && displayEscalation && (
-                <>
-                    {/* Backdrop for blur */}
+                <div className="fixed inset-0 z-50 flex justify-end">
                     <div
                         ref={panelBackdropRef}
-                        className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-40"
+                        className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm"
                         onClick={() => setSelectedEscalation(null)}
                     />
                     <div
                         ref={panelRef}
-                        className="fixed inset-y-0 right-0 w-[650px] bg-zinc-950 border-l border-zinc-800 shadow-2xl z-50 flex flex-col"
+                        className="relative w-full max-w-2xl bg-zinc-950 border-l border-zinc-800 shadow-2xl flex flex-col h-full"
                     >
+                        {/* Panel Header */}
                         <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
-                            <h3 className="font-bold text-lg">Escalation Details</h3>
-                            <button onClick={() => setSelectedEscalation(null)} className="text-zinc-500 hover:text-zinc-50">
+                            <div className="flex items-center gap-3">
+                                <div className={cn(
+                                    "p-2 rounded-xl",
+                                    displayEscalation.priority === 'critical' ? "bg-rose-500/10 text-rose-500" : "bg-zinc-800 text-zinc-400"
+                                )}>
+                                    <ShieldAlert size={24} />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-zinc-50">Escalation Detail</h3>
+                                    <p className="text-xs text-zinc-500">ID: {displayEscalation.id}</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setSelectedEscalation(null)}
+                                className="p-2 hover:bg-zinc-900 rounded-xl transition-colors text-zinc-500"
+                            >
                                 <ChevronRight size={24} />
                             </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                            {/* AI Context */}
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-2 text-emerald-500">
-                                    <AlertCircle size={18} />
-                                    <span className="text-sm font-bold uppercase tracking-wider">AI Forensics</span>
+                        {/* Panel Content */}
+                        <div className="flex-1 overflow-y-auto p-8 space-y-8">
+                            {/* Summary Card */}
+                            <div className="p-6 bg-zinc-900/50 border border-zinc-800 rounded-2xl space-y-4">
+                                <div className="flex justify-between items-start">
+                                    <h4 className="text-lg font-bold text-zinc-50">{displayEscalation.subject}</h4>
+                                    <span className={cn(
+                                        "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border",
+                                        getPriorityColor(displayEscalation.priority)
+                                    )}>
+                                        {displayEscalation.priority}
+                                    </span>
                                 </div>
-                                <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl space-y-3">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-xs text-zinc-500">Confidence Score</span>
-                                        <span className="text-sm font-bold text-emerald-500">{(displayEscalation.confidence * 100).toFixed(0)}%</span>
+                                <p className="text-zinc-400 text-sm leading-relaxed">
+                                    {displayEscalation.content}
+                                </p>
+                            </div>
+
+                            {/* AI Forensics */}
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-2 text-zinc-50 font-bold">
+                                    <Info size={18} className="text-blue-500" />
+                                    AI Forensics & Escalation Reason
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl">
+                                        <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Confidence Score</div>
+                                        <div className="text-xl font-bold text-emerald-500">{(displayEscalation.confidence * 100).toFixed(1)}%</div>
                                     </div>
-                                    <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
-                                        <div className="h-full bg-emerald-500" style={{ width: `${displayEscalation.confidence * 100}%` }} />
+                                    <div className="p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl">
+                                        <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Sentiment</div>
+                                        <div className="text-xl font-bold text-blue-500">Neutral</div>
                                     </div>
-                                    <p className="text-sm text-zinc-300 leading-relaxed italic">
+                                </div>
+                                <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+                                    <div className="text-xs font-bold text-amber-500 mb-2 uppercase tracking-tight">Escalation Trigger</div>
+                                    <p className="text-sm text-zinc-300 italic">
                                         "{displayEscalation.aiReason}"
                                     </p>
                                 </div>
                             </div>
 
-                            {/* Email Content */}
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-2 text-zinc-400">
-                                    <MessageSquare size={18} />
-                                    <span className="text-sm font-bold uppercase tracking-wider">Original Message</span>
-                                </div>
-                                <div className="p-6 bg-zinc-900/50 border border-zinc-800 rounded-xl">
-                                    <div className="space-y-2 mb-4">
-                                        <div className="text-sm font-medium text-zinc-200">{displayEscalation.subject}</div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                                            {displayEscalation.content}
-                                        </p>
+                            {/* Metadata Grid */}
+                            <div className="grid grid-cols-2 gap-8">
+                                <div className="space-y-4">
+                                    <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Assignment</div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-zinc-400">
+                                            {displayEscalation.assignedTo?.charAt(0)}
+                                        </div>
+                                        <div>
+                                            <div className="text-sm font-bold text-zinc-50">{displayEscalation.assignedTo}</div>
+                                            <div className="text-xs text-zinc-500">{displayEscalation.department}</div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-
-                            {/* Metadata */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="p-4 bg-zinc-900/30 border border-zinc-800/50 rounded-xl">
-                                    <div className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Department</div>
-                                    <div className="text-sm text-zinc-300">{displayEscalation.department}</div>
-                                </div>
-                                <div className="p-4 bg-zinc-900/30 border border-zinc-800/50 rounded-xl">
-                                    <div className="text-[10px] text-zinc-500 font-bold uppercase mb-1">Reason</div>
-                                    <div className="text-sm text-zinc-300">{displayEscalation.reason}</div>
+                                <div className="space-y-4">
+                                    <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest">SLA Deadline</div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500">
+                                            <Clock size={20} />
+                                        </div>
+                                        <div>
+                                            <div className={cn("text-sm font-bold", getSLAStatus(displayEscalation.slaDeadline).color)}>
+                                                {getSLAStatus(displayEscalation.slaDeadline).label}
+                                            </div>
+                                            <div className="text-xs text-zinc-500">
+                                                {displayEscalation.slaDeadline.toLocaleString()}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Actions Footer */}
-                        <div className="p-6 border-t border-zinc-800 grid grid-cols-2 gap-4">
+                        {/* Panel Footer */}
+                        <div className="p-6 border-t border-zinc-800 bg-zinc-900/30 flex gap-4">
                             <GSAPButton
-                                onClick={() => handleAction('false_escalation', displayEscalation)}
                                 variant="primary"
-                                className="py-3"
+                                className="flex-1 py-4 rounded-xl font-bold flex items-center justify-center gap-2"
+                                onClick={() => handleAction('pending_resolution', displayEscalation)}
+                                disabled={isActionLoading}
                             >
-                                <CheckCircle2 size={18} />
-                                Resolve
+                                {isActionLoading ? (
+                                    <div className="w-5 h-5 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                    <>
+                                        <MessageSquare size={20} />
+                                        Respond & Resolve
+                                    </>
+                                )}
                             </GSAPButton>
                             <GSAPButton
-                                onClick={() => handleAction('assign', displayEscalation)}
                                 variant="secondary"
-                                className="py-3"
+                                className="p-4 rounded-xl"
+                                onClick={() => handleAction('escalate_department', displayEscalation)}
                             >
-                                <UserPlus size={18} />
-                                {displayEscalation.assignedTo === 'Unassigned' ? 'Assign to Me' : 'Reassign'}
+                                <UserPlus size={20} />
                             </GSAPButton>
                         </div>
                     </div>
-                </>
+                </div>
             )}
 
-            {/* User Selection Dialog */}
+            {/* Dialogs */}
             <UserSelectionDialog
                 isOpen={isUserDialogOpen}
-                onClose={() => {
-                    setIsUserDialogOpen(false);
-                    setUserDialogTarget(null);
-                }}
-                onSelect={(userId: string) => {
-                    if (userDialogTarget) {
-                        handleAction('assign', userDialogTarget, { assigneeId: userId });
-                    }
-                }}
-                currentAssigneeId={userDialogTarget?.assignedToId === 'Unassigned' ? undefined : userDialogTarget?.assignedToId}
-                title={userDialogTarget?.assignedToId === 'Unassigned' ? "Assign Escalation" : "Reassign Escalation"}
+                onClose={() => setIsUserDialogOpen(false)}
+                onSelect={(userId) => handleAction('assign', userDialogTarget, { userId })}
+                title={`Assign ${userDialogTarget?.subject}`}
             />
 
-            {/* Department Selection Dialog */}
             <DepartmentSelectionDialog
                 isOpen={isDepartmentDialogOpen}
-                onClose={() => {
-                    setIsDepartmentDialogOpen(false);
-                    setDepartmentDialogTarget(null);
-                }}
-                onSelect={(departmentId) => {
-                    if (departmentDialogTarget) {
-                        handleAction('escalate_department_confirm', departmentDialogTarget, { departmentId });
-                    }
-                }}
-                currentDepartmentId={departmentDialogTarget?.department}
-                title="Escalate to Team"
+                onClose={() => setIsDepartmentDialogOpen(false)}
+                onSelect={(deptId) => handleAction('escalate_department', departmentDialogTarget, { departmentId: deptId })}
+                title={`Route to Department`}
             />
 
-            {/* False Escalation Confirmation Dialog */}
             <ConfirmationDialog
                 isOpen={isConfirmDialogOpen}
-                onClose={() => {
-                    setIsConfirmDialogOpen(false);
-                    setConfirmDialogTarget(null);
-                }}
-                onConfirm={() => {
-                    if (confirmDialogTarget) {
-                        handleAction('false_escalation_confirm', confirmDialogTarget);
-                        setIsConfirmDialogOpen(false);
-                    }
-                }}
+                onClose={() => setIsConfirmDialogOpen(false)}
+                onConfirm={() => handleAction('false_escalation', confirmDialogTarget)}
                 title="Mark as False Escalation?"
-                description="This will resolve the escalation and mark it as handled. This action cannot be undone."
-                confirmLabel="Mark as False"
-                variant="danger"
+                description="This will resolve the escalation and train the AI that this was a mistake. Are you sure?"
                 isLoading={isActionLoading}
             />
         </div>
     );
 }
+
+// Helper components
+const Dropdown = ({ children }: { children: React.ReactNode }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    return (
+        <div className="relative" ref={containerRef}>
+            {React.Children.map(children, child => {
+                if (React.isValidElement(child)) {
+                    return React.cloneElement(child as React.ReactElement<any>, { isOpen, setIsOpen });
+                }
+                return child;
+            })}
+        </div>
+    );
+};
+
+const DropdownTrigger = ({ children, isOpen, setIsOpen }: any) => {
+    return React.cloneElement(children, {
+        onClick: (e: React.MouseEvent) => {
+            e.stopPropagation();
+            setIsOpen(!isOpen);
+        }
+    });
+};
+
+const DropdownContent = ({ children, isOpen, setIsOpen }: any) => {
+    return (
+        <GSAPMenu
+            isOpen={isOpen}
+            className="absolute right-0 mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-50 py-2 overflow-hidden"
+        >
+            {React.Children.map(children, child => {
+                if (React.isValidElement(child)) {
+                    return React.cloneElement(child as React.ReactElement<any>, {
+                        onClick: (e: any) => {
+                            child.props.onClick?.(e);
+                            setIsOpen(false);
+                        }
+                    });
+                }
+                return child;
+            })}
+        </GSAPMenu>
+    );
+};
+
+const DropdownItem = ({ children, onClick, destructive }: any) => {
+    return (
+        <button
+            onClick={(e) => {
+                e.stopPropagation();
+                onClick?.(e);
+            }}
+            className={cn(
+                "w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-zinc-800",
+                destructive ? "text-rose-500" : "text-zinc-300"
+            )}
+        >
+            {children}
+        </button>
+    );
+};

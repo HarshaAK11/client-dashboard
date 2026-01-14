@@ -1,19 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
-import { QUERY_KEYS } from '@/lib/queryKeys';
-import { authFetch } from '@/lib/api-client';
+
+async function fetchDepartments() {
+    const response = await fetch('/api/departments');
+    if (!response.ok) {
+        throw new Error('Network response was not ok');
+    }
+    return response.json();
+}
 
 export function useDepartments() {
     return useQuery({
-        queryKey: QUERY_KEYS.DEPARTMENTS,
-        queryFn: async () => {
-            const res = await authFetch('/api/departments');
-            if (!res.ok) throw new Error('Failed to fetch departments');
-            return res.json();
-        },
-        staleTime: Infinity,
-        gcTime: Infinity,
-        refetchOnMount: false,
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: false
+        queryKey: ['departments'],
+        queryFn: fetchDepartments,
     });
 }

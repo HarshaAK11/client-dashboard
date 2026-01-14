@@ -1,6 +1,6 @@
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
-import { Role } from '@/contexts/UserContext';
+import { Role } from '@/types/user';
 
 /**
  * Role Change Session Management

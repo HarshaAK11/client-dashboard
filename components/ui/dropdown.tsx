@@ -30,7 +30,7 @@ interface DropdownItemProps {
 interface DropdownContextType {
     isOpen: boolean;
     setIsOpen: (open: boolean) => void;
-    triggerRef: React.RefObject<HTMLDivElement>;
+    triggerRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const DropdownContext = React.createContext<DropdownContextType | null>(null);

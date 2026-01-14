@@ -1,8 +1,10 @@
+export type Role = 'admin' | 'manager' | 'agent';
+
 export interface User {
     id: string;
     email: string;
     full_name: string;
-    role: 'admin' | 'manager' | 'agent';
+    role: Role;
     department_id: string | null;
     department_name?: string;
     tenant_id: string;

@@ -1,30 +1,19 @@
-import { createRequestClient } from '@/lib/supabase/server-client';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
-import { getAuthenticatedUserFromRequest, requireRole, AuthError } from '@/middleware/auth';
-import { logAccess } from '@/lib/audit';
 
 /**
  * POST /api/users/invite
  * 
- * Invite a new user to the platform.
- * - Admin: Can invite users to any department
- * - Manager: Can only invite users to their own department
- * 
- * Uses Supabase Auth Admin API to send invitation email.
- * User will set their own password via the invitation link.
+ * Invite a new user to the platform in public mode.
+ * Uses the mock tenant ID from environment variables.
  */
 export async function POST(request: Request) {
     try {
-        // Authenticate the requesting user
-        const authenticatedUser = await getAuthenticatedUserFromRequest(request);
-        const supabase = createRequestClient(authenticatedUser.accessToken);
+        const supabase = createSupabaseBrowserClient();
+        const tenantId = process.env.NEXT_PUBLIC_MOCK_TENANT_ID;
 
-        // Only admins and managers can invite users
-        if (!requireRole(authenticatedUser, ['admin', 'manager'])) {
-            return Response.json(
-                { error: 'Forbidden: Only admins and managers can invite users' },
-                { status: 403 }
-            );
+        if (!tenantId) {
+            return Response.json({ error: 'Tenant ID not configured' }, { status: 500 });
         }
 
         // Parse request body
@@ -46,44 +35,18 @@ export async function POST(request: Request) {
             );
         }
 
-        // Role-based authorization checks
-        if (authenticatedUser.role === 'manager') {
-            // Managers can only invite to their own department
-            if (!authenticatedUser.department_id) {
-                return Response.json(
-                    { error: 'Manager must be assigned to a department to invite users' },
-                    { status: 400 }
-                );
-            }
-
-            if (department_id && department_id !== authenticatedUser.department_id) {
-                return Response.json(
-                    { error: 'Managers can only invite users to their own department' },
-                    { status: 403 }
-                );
-            }
-
-            // Managers cannot invite admins
-            if (role === 'admin') {
-                return Response.json(
-                    { error: 'Managers cannot invite admin users' },
-                    { status: 403 }
-                );
-            }
-        }
-
-        // Check if user already exists using admin client to bypass RLS
+        // Check if user already exists
         const admin = getSupabaseAdmin();
         const { data: existingUser } = await (admin || supabase)
             .from('users')
             .select('id, email')
             .eq('email', email.toLowerCase())
-            .eq('tenant_id', authenticatedUser.tenant_id)
+            .eq('tenant_id', tenantId)
             .single();
 
         if (existingUser) {
             return Response.json(
-                { error: 'A user with this email already exists in your organization' },
+                { error: 'A user with this email already exists in this organization' },
                 { status: 409 }
             );
         }
@@ -103,7 +66,7 @@ export async function POST(request: Request) {
                 data: {
                     full_name,
                     role,
-                    tenant_id: authenticatedUser.tenant_id,
+                    tenant_id: tenantId,
                     department_id: department_id || null,
                 },
                 redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/callback`
@@ -125,7 +88,7 @@ export async function POST(request: Request) {
             );
         }
 
-        // Create user record in public.users table using admin client
+        // Create user record in public.users table
         const { data: newUser, error: userError } = await (admin || supabase)
             .from('users')
             .insert({
@@ -133,7 +96,7 @@ export async function POST(request: Request) {
                 email: email.toLowerCase(),
                 full_name,
                 role,
-                tenant_id: authenticatedUser.tenant_id,
+                tenant_id: tenantId,
                 department_id: department_id || null,
             })
             .select()
@@ -141,32 +104,13 @@ export async function POST(request: Request) {
 
         if (userError) {
             console.error('Error creating user record:', userError);
-
             // Rollback: Delete the auth user if we couldn't create the profile
             await admin.auth.admin.deleteUser(authUser.user.id);
-
             return Response.json(
                 { error: 'Failed to create user profile' },
                 { status: 500 }
             );
         }
-
-        // Audit log
-        await logAccess({
-            userId: authenticatedUser.id,
-            userRole: authenticatedUser.role,
-            action: 'write',
-            resourceType: 'user',
-            resourceId: newUser.id,
-            endpoint: '/api/users/invite',
-            request,
-            tenantId: authenticatedUser.tenant_id,
-            metadata: {
-                invited_email: email,
-                invited_role: role,
-                invited_department_id: department_id,
-            },
-        });
 
         return Response.json(
             {
@@ -183,9 +127,6 @@ export async function POST(request: Request) {
             { status: 201 }
         );
     } catch (error: any) {
-        if (error instanceof AuthError) {
-            return Response.json({ error: error.message }, { status: error.status });
-        }
         console.error('Invite user error:', error);
         return Response.json(
             { error: 'Internal server error' },

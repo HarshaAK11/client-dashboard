@@ -12,13 +12,11 @@ export const createSupabaseBrowserClient = () => {
         const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
         if (!supabaseUrl || !supabaseAnonKey) {
-            console.warn('Supabase env vars missing in createSupabaseBrowserClient');
-            // Return a dummy client or null if strictly necessary, but better to throw or handle upstream.
-            // For build time, if we are just prerendering and not fetching, maybe we can survive?
-            // But createClient throws if url is missing.
-            if (process.env.NODE_ENV === 'production' && typeof window === 'undefined') {
-                // During build/SSR, if vars are missing, we might want to skip or fail gracefully?
-                // But usually they should be there.
+            // If we are on the server (build time/SSR) and env vars are missing, return null
+            // to avoid crashing the build.
+            if (typeof window === 'undefined') {
+                console.warn('Supabase env vars missing during SSR/Build. Returning null client.');
+                return null as unknown as SupabaseClient;
             }
             throw new Error("NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required");
         }

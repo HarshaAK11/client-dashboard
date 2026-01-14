@@ -15,6 +15,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     const supabase = createSupabaseBrowserClient();
 
     useEffect(() => {
+        if (!supabase) return;
+
         const channel = supabase
             .channel('app_changes')
             .on(
@@ -34,7 +36,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
             .subscribe()
 
         return () => {
-            supabase.removeChannel(channel);
+            if (supabase) {
+                supabase.removeChannel(channel);
+            }
         };
     }, [supabase, queryClient]);
 

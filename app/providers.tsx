@@ -5,12 +5,14 @@ import { useState, useEffect } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 // Initialize browser client for real-time subscriptions
-const supabase = createSupabaseBrowserClient();
 
 import { QUERY_KEYS } from '@/lib/queryKeys';
 
 export default function Providers({ children }: { children: React.ReactNode }) {
     const [queryClient] = useState(() => new QueryClient());
+
+    // Initialize Supabase client lazily
+    const supabase = createSupabaseBrowserClient();
 
     useEffect(() => {
         const channel = supabase
@@ -34,7 +36,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, []);
+    }, [supabase, queryClient]);
 
     return (
         <QueryClientProvider client={queryClient}>

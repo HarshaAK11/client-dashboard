@@ -29,7 +29,7 @@ export default function LoginForm() {
                 throw new Error(data.error || 'Login failed');
             }
 
-            router.push('/');
+            router.push('/dashboard');
             router.refresh();
         } catch (err: any) {
             setError(err.message || 'An error occurred during login');

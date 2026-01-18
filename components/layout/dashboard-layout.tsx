@@ -10,7 +10,8 @@ import {
     LogOut,
     Mail,
     Activity,
-    UserCircle
+    UserCircle,
+    ChevronsUpDown
 } from 'lucide-react';
 import { cn } from '@/components/ui/dashboard-components';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -20,15 +21,20 @@ interface DashboardLayoutProps {
     children: React.ReactNode;
     currentView: string;
     onViewChange: (view: string) => void;
+    channel: 'email' | 'whatsapp';
+    onChannelChange: (channel: 'email' | 'whatsapp') => void;
 }
 
 export default function DashboardLayout({
     children,
     currentView,
-    onViewChange
+    onViewChange,
+    channel,
+    onChannelChange
 }: DashboardLayoutProps) {
     const router = useRouter();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [userData, setUserData] = useState<{
         email: string;
         fullName: string;
@@ -37,6 +43,23 @@ export default function DashboardLayout({
     } | null>(null);
 
     const supabase = createSupabaseBrowserClient();
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            const target = event.target as HTMLElement;
+            if (!target.closest('.channel-dropdown')) {
+                setIsDropdownOpen(false);
+            }
+        };
+
+        if (isDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isDropdownOpen]);
 
     useEffect(() => {
         async function loadUserData() {
@@ -91,20 +114,63 @@ export default function DashboardLayout({
         { name: 'Dashboard', icon: LayoutDashboard },
         { name: 'Escalations', icon: ShieldAlert },
         { name: 'Team', icon: Users },
-        /*{ name: 'Analytics', icon: Activity },
-        { name: 'Settings', icon: Settings },*/
+        { name: 'Analytics', icon: Activity },
+        { name: 'Settings', icon: Settings },
     ];
 
     return (
         <div className="min-h-screen bg-zinc-950 text-zinc-50 flex flex-col h-screen overflow-hidden">
             {/* Header */}
-            <header className="h-12 border-b border-zinc-800/50 glass flex items-center px-6 justify-between shrink-0">
+            <header className="h-12 border-b border-zinc-800/50 glass flex items-center px-6 justify-between shrink-0 relative z-50">
                 <div className="flex items-center gap-4">
                     <Image src="/logo.png" alt="Logo" width={32} height={32} />
                     <span className='text-zinc-600'>/</span>
                     <span className="text-sm font-medium text-zinc-200">{userData?.tenantName || 'Loading...'}</span>
                     <span className='text-zinc-600'>/</span>
-                    <span className="text-sm font-medium">{userData?.email || 'Loading...'}</span>
+                    <span className="text-sm font-medium text-zinc-200">{userData?.email || 'Loading...'}</span>
+                    <span className='text-zinc-600'>/</span>
+                    <span className="text-sm font-medium text-zinc-200 capitalize">{channel}</span>
+                    <div className="relative channel-dropdown">
+                        <button
+                            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                            className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-all"
+                        >
+                            <ChevronsUpDown size={14} />
+                        </button>
+                        {isDropdownOpen && (
+                            <div className="absolute left-0 mt-2 w-40 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl transition-all z-[100] overflow-hidden">
+                                <div className="px-3 py-2 border-b border-zinc-800 bg-zinc-900/50">
+                                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Select Channel</span>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        onChannelChange('email');
+                                        setIsDropdownOpen(false);
+                                    }}
+                                    className={cn(
+                                        "w-full text-left px-4 py-2.5 text-sm hover:bg-zinc-900 transition-colors flex items-center justify-between",
+                                        channel === 'email' ? "text-emerald-400 bg-emerald-500/5" : "text-zinc-400"
+                                    )}
+                                >
+                                    Email
+                                    {channel === 'email' && <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        onChannelChange('whatsapp');
+                                        setIsDropdownOpen(false);
+                                    }}
+                                    className={cn(
+                                        "w-full text-left px-4 py-2.5 text-sm hover:bg-zinc-900 transition-colors flex items-center justify-between",
+                                        channel === 'whatsapp' ? "text-emerald-400 bg-emerald-500/5" : "text-zinc-400"
+                                    )}
+                                >
+                                    Whatsapp
+                                    {channel === 'whatsapp' && <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <div className="flex items-center gap-4">
                     <div className="flex flex-col items-end">
@@ -161,6 +227,6 @@ export default function DashboardLayout({
                     </div>
                 </main>
             </div>
-        </div>
+        </div >
     );
 }

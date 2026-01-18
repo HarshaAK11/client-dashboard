@@ -48,6 +48,9 @@ import {
     cn
 } from '@/components/ui/dashboard-components';
 
+const features = {
+};
+
 // Mock Data for Analytics
 const automationEffectivenessData = [
     { name: 'Week 1', success: 82, falseAuto: 5, bounce: 13 },
@@ -92,6 +95,9 @@ const behavioralData = [
 export default function AnalyticsView() {
     const [activeTab, setActiveTab] = useState('overview');
     const [dateRange, setDateRange] = useState('Last 30 Days');
+
+    const currentAutomationData = automationEffectivenessData;
+    const currentCostData = costAnalysisData;
 
     return (
         <div className="flex flex-col gap-8 pb-12">
@@ -141,7 +147,7 @@ export default function AnalyticsView() {
 
                     <div className="h-[250px] w-full mb-6">
                         <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={automationEffectivenessData}>
+                            <AreaChart data={currentAutomationData}>
                                 <defs>
                                     <linearGradient id="colorSuccess" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
@@ -192,7 +198,7 @@ export default function AnalyticsView() {
 
                     <div className="h-[250px] w-full mb-6">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={costAnalysisData}>
+                            <BarChart data={currentCostData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
                                 <XAxis dataKey="name" stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} />
                                 <YAxis stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} />

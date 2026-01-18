@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 
 export default function Home() {
   const [view, setView] = useState('Dashboard');
+  const [channel, setChannel] = useState<'email' | 'whatsapp'>('email');
   const router = useRouter();
 
   const renderContent = () => {
@@ -28,13 +29,15 @@ export default function Home() {
     }
 
     // Default: Dashboard view
-    return <UnifiedDashboard />;
+    return <UnifiedDashboard channel={channel} />;
   };
 
   return (
     <DashboardLayout
       currentView={view}
       onViewChange={setView}
+      channel={channel}
+      onChannelChange={setChannel}
     >
       <div className="max-w-7xl mx-auto">
         {renderContent()}

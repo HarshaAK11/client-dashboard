@@ -34,7 +34,6 @@ import { GSAPButton } from '@/components/ui/gsap-button';
 import { gsapAnimations } from '@/lib/gsap-animations';
 import gsap from 'gsap';
 import { useEscalations } from '@/hooks/useEscalations';
-import { authFetch } from '@/lib/api-client';
 
 const GSAPMenu = ({
     isOpen,
@@ -125,6 +124,7 @@ export default function EscalationsView() {
     useEffect(() => {
         if (selectedEscalation) {
             setDisplayEscalation(selectedEscalation);
+            console.log(selectedEscalation);
             setShouldRenderPanel(true);
         } else if (shouldRenderPanel) {
             if (panelBackdropRef.current && panelRef.current) {
@@ -182,7 +182,7 @@ export default function EscalationsView() {
         if (action === 'pending_resolution') {
             setIsActionLoading(true);
             try {
-                const response = await authFetch(`/api/emails/events/${item.id}/resolve`, {
+                const response = await fetch(`/api/emails/events/${item.id}/resolve`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -226,7 +226,7 @@ export default function EscalationsView() {
 
         setIsActionLoading(true);
         try {
-            const response = await authFetch('/api/escalations/actions', {
+            const response = await fetch('/api/escalations/actions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action, eventId: item.id, payload })
@@ -503,27 +503,86 @@ export default function EscalationsView() {
                                 </p>
                             </div>
 
-                            {/* AI Forensics */}
+                            {/* AI Forensics & Escalation Context */}
                             <div className="space-y-4">
                                 <div className="flex items-center gap-2 text-zinc-50 font-bold">
                                     <Info size={18} className="text-blue-500" />
-                                    AI Forensics & Escalation Reason
+                                    AI Forensics & Escalation Context
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl">
-                                        <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Confidence Score</div>
-                                        <div className="text-xl font-bold text-emerald-500">{(displayEscalation.confidence * 100).toFixed(1)}%</div>
+                                        <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Intent</div>
+                                        <div className="text-xl font-bold text-zinc-50">
+                                            {displayEscalation.intent || "Unclassified"}
+                                        </div>
                                     </div>
                                     <div className="p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl">
-                                        <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Sentiment</div>
-                                        <div className="text-xl font-bold text-blue-500">Neutral</div>
+                                        <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Sentiment Score</div>
+                                        <div className="flex items-baseline gap-2">
+                                            <div className="text-xl font-bold text-zinc-50">
+                                                {displayEscalation.sentiment_score !== null && displayEscalation.sentiment_score !== undefined
+                                                    ? displayEscalation.sentiment_score.toFixed(2)
+                                                    : "Not evaluated"}
+                                            </div>
+                                            {displayEscalation.sentiment_score !== null && displayEscalation.sentiment_score !== undefined && (
+                                                <div className={cn(
+                                                    "text-xs font-bold",
+                                                    displayEscalation.sentiment_score >= 0.3 ? "text-emerald-500" :
+                                                        displayEscalation.sentiment_score <= -0.3 ? "text-rose-500" : "text-blue-500"
+                                                )}>
+                                                    {displayEscalation.sentiment_score >= 0.3 ? "Positive" :
+                                                        displayEscalation.sentiment_score <= -0.3 ? "Negative" : "Neutral"}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
-                                    <div className="text-xs font-bold text-amber-500 mb-2 uppercase tracking-tight">Escalation Trigger</div>
-                                    <p className="text-sm text-zinc-300 italic">
-                                        "{displayEscalation.aiReason}"
-                                    </p>
+                                    <div className="p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl col-span-2">
+                                        <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Escalation Reason</div>
+                                        <div className="text-sm text-zinc-300">
+                                            {(() => {
+                                                const mapping: Record<string, string> = {
+                                                    missing_info: "Missing required information",
+                                                    ambiguous_response: "Ambiguous or unclear response",
+                                                    policy_limit: "Automation policy limit reached",
+                                                    confidence_low: "AI confidence below threshold",
+                                                    handoff_required: "Manual handling required",
+                                                    user_refusal: "User declined to proceed"
+                                                };
+                                                return displayEscalation.escalation_reason
+                                                    ? (mapping[displayEscalation.escalation_reason] || displayEscalation.escalation_reason)
+                                                    : "Escalated without recorded reason";
+                                            })()}
+                                        </div>
+                                    </div>
+                                    <div className="p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl col-span-2">
+                                        <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Pending Since</div>
+                                        <div className="text-sm text-zinc-300">
+                                            {(() => {
+                                                if (!displayEscalation.updated_at) return "Not pending";
+
+                                                const pendingDate = new Date(displayEscalation.updated_at);
+                                                const now = new Date();
+                                                const diffMs = now.getTime() - pendingDate.getTime();
+                                                const diffMins = Math.floor(diffMs / (1000 * 60));
+
+                                                if (diffMins < 60) {
+                                                    return `${diffMins} minutes`;
+                                                }
+
+                                                const diffHours = Math.floor(diffMins / 60);
+                                                const remainingMins = diffMins % 60;
+
+                                                if (diffHours < 24) {
+                                                    return `${diffHours} hours ${remainingMins} minutes`;
+                                                }
+
+                                                const diffDays = Math.floor(diffHours / 24);
+                                                const remainingHours = diffHours % 24;
+
+                                                return `${diffDays} days ${remainingHours} hours ${remainingMins} minutes`;
+                                            })()}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

@@ -1,44 +1,34 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
-const DEMO_SESSION_COOKIE = 'demo_session';
+const authRoutes = ['/login', '/forgot-password']
 
-export function middleware(request: NextRequest) {
-    const { pathname } = request.nextUrl;
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
 
-    // Check if the user is trying to access a protected route
-    if (pathname.startsWith('/dashboard')) {
-        const session = request.cookies.get(DEMO_SESSION_COOKIE);
+  // Get access to token from cookies
+  const token = request.cookies.get('sb-access-token')?.value
 
-        if (!session) {
-            // Redirect to login if no session is found
-            const url = new URL('/login', request.url);
-            return NextResponse.redirect(url);
-        }
-    }
+  // If user is at root, redirect to dashboard (which will then be handled by the logic below)
+  if (pathname === '/') {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
 
-    // Redirect logged-in users away from login page
-    if (pathname === '/login') {
-        const session = request.cookies.get(DEMO_SESSION_COOKIE);
-        if (session) {
-            const url = new URL('/dashboard', request.url);
-            return NextResponse.redirect(url);
-        }
-    }
+  // If user has token and tries to access auth routes, redirect to dashboard
+  if (token && authRoutes.some(route => pathname.startsWith(route))) {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
 
-    return NextResponse.next();
+  // If user doesn't have token and tries to access protected routes, redirect to login
+  // Protecting everything under /dashboard
+  if (!token && pathname.startsWith('/dashboard')) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  return NextResponse.next()
 }
 
 export const config = {
-    matcher: [
-        /*
-         * Match all request paths except for the ones starting with:
-         * - api (API routes)
-         * - _next/static (static files)
-         * - _next/image (image optimization files)
-         * - favicon.ico (favicon file)
-         * - public (public files)
-         */
-        '/((?!api|_next/static|_next/image|favicon.ico|public).*)',
-    ],
-};
+  matcher: [
+    '/((?!api|_next/static|_next/image|favicon.ico|auth/reset-password|forgot-password).*)',
+  ],
+}

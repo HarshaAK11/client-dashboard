@@ -1,7 +1,7 @@
-import LoginForm from '@/components/auth/login-form';
+import ForgotPasswordForm from '@/components/auth/forgot-password-form';
 import Image from 'next/image';
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
     return (
         <main className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-zinc-950">
             {/* Dynamic Background Elements */}
@@ -28,9 +28,8 @@ export default function LoginPage() {
                     </div>
                 </div>
 
-                <LoginForm />
+                <ForgotPasswordForm />
             </div>
         </main>
     );
 }
-

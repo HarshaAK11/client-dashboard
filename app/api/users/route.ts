@@ -1,26 +1,46 @@
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { createSupabaseBrowser } from '@/lib/supabase/client';
+import { NextResponse, NextRequest } from 'next/server';
+import { getAuthUserOrError } from '@/lib/auth';
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
     try {
-        const supabase = createSupabaseBrowserClient();
-        const { data, error } = await supabase
-            .from('users')
-            .select('*, departments(name)')
-            .eq('tenant_id', process.env.NEXT_PUBLIC_MOCK_TENANT_ID)
-            .order('created_at', { ascending: false });
+        const authResult = await getAuthUserOrError()
 
-        if (error) {
-            console.error('Error fetching users:', error);
-            return Response.json({ error: error.message }, { status: 500 });
+        if ('error' in authResult) {
+            return NextResponse.json(
+                { error: authResult.error },
+                { status: authResult.status }
+            )
         }
 
-        // Transform to include department_name
-        const transformedData = data?.map(user => ({
-            ...user,
-            department_name: user.departments?.name || 'No Department'
-        }));
+        const { user } = authResult
 
-        return Response.json({ data: transformedData });
+        return NextResponse.json(
+            {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                role: user.role
+            }
+        )
+        /*const supabase = createSupabaseBrowser();
+        const { data: { user }, error } = await supabase.auth.getUser()
+
+        if (error || !user) {
+            return NextResponse.json(
+                { error: "Unauthorized" },
+                { status: 401 }
+            )
+        }
+
+        return NextResponse.json(
+            {
+                id: user.id,
+                email: user.email,
+                name: user.user_metadata.full_name,
+                role: user.role,
+            }
+        )*/
     } catch (error: any) {
         console.error('Unexpected error:', error);
         return Response.json({ error: 'Internal server error' }, { status: 500 });

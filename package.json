@@ -10,9 +10,11 @@
     "seed:dev-users": "node scripts/create-dev-users.js"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.89.0",
     "@tanstack/react-query": "^5.90.16",
     "@types/gsap": "^1.20.2",
+    "@upstash/ratelimit": "^2.0.8",
     "clsx": "^2.1.1",
     "gsap": "^3.14.2",
     "lucide-react": "^0.562.0",

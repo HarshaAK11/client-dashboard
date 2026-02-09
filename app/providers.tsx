@@ -2,7 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { createSupabaseBrowser } from '@/lib/supabase/client';
 
 // Initialize browser client for real-time subscriptions
 
@@ -12,7 +12,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     const [queryClient] = useState(() => new QueryClient());
 
     // Initialize Supabase client lazily
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createSupabaseBrowser();
 
     useEffect(() => {
         if (!supabase) return;

@@ -1,8 +1,8 @@
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { createSupabaseBrowser } from '@/lib/supabase/client';
 
 export async function POST(request: Request) {
     try {
-        const supabase = createSupabaseBrowserClient();
+        const supabase = createSupabaseBrowser();
         const { action, eventId, payload } = await request.json();
 
         if (!eventId) {

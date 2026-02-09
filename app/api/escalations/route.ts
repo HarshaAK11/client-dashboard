@@ -1,12 +1,21 @@
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { createSupabaseBrowser } from '@/lib/supabase/client';
+import { getAuthUserOrError } from '@/lib/auth';
 
 export async function GET(request: Request) {
     try {
-        const supabase = createSupabaseBrowserClient();
+        const authResult = await getAuthUserOrError()
+
+        if ('error' in authResult) {
+            return Response.json({ error: authResult.error }, { status: authResult.status })
+        }
+
+        const { user } = authResult
+        
+        const supabase = createSupabaseBrowser();
         const { data, error } = await supabase
             .from('email_events')
             .select('*, departments(name), users:assigned_user_id(full_name)')
-            .eq('tenant_id', process.env.NEXT_PUBLIC_MOCK_TENANT_ID)
+            .eq('tenant_id', user.tenant_id)
             .order('created_at', { ascending: false });
 
         if (error) {

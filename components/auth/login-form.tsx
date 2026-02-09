@@ -1,50 +1,53 @@
 "use client";
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function LoginForm() {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const router = useRouter();
+
+    const [email, setEmail] = useState<string>('');
+    const [password, setPassword] = useState<string>('');
+    const [error, setError] = useState<string>('');
+    const [loading, setLoading] = useState<boolean>(false);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        setError(null);
+        setError('');
 
         try {
-            // TEMP AUTH WORKAROUND – REMOVE BEFORE MULTI-USER / PROD SCALE
-            const response = await fetch('/api/auth/temp-login', {
+            const response = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
-            });
+                body: JSON.stringify({ email, password })
+            })
 
-            const data = await response.json();
+            const data = await response.json()
 
             if (!response.ok) {
-                throw new Error(data.error || 'Login failed');
+                setError(data.error || 'Failed to login')
+                setLoading(false)
+                return
             }
 
-            router.push('/dashboard');
-            router.refresh();
-        } catch (err: any) {
-            setError(err.message || 'An error occurred during login');
-        } finally {
-            setLoading(false);
+            router.push('/dashboard')
+            router.refresh()
+        } catch (error) {
+            setError('Login failed')
+            setLoading(false)
         }
-    };
+    }
 
     return (
-        <div className="w-full max-w-md p-8 space-y-8 bg-zinc-900/50 backdrop-blur-xl rounded-2xl border border-zinc-800/50 shadow-2xl animate-in fade-in zoom-in duration-500">
+        <div className="w-full max-w-md p-8 space-y-8 bg-zinc-900/40 backdrop-blur-2xl rounded-3xl border border-zinc-800/50 shadow-[0_0_50px_-12px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in duration-700">
             <div className="text-center space-y-2">
-                <h1 className="text-3xl font-bold tracking-tight text-zinc-50">Log in</h1>
+                <h1 className="text-3xl font-bold tracking-tight text-zinc-50">Welcome back</h1>
+                <p className="text-zinc-500 text-sm">Enter your credentials to access your dashboard</p>
             </div>
 
-            <form onSubmit={handleLogin} className="space-y-6">
+            <form className="space-y-6" onSubmit={handleLogin}>
                 <div className="space-y-2">
                     <label className="text-sm font-medium text-zinc-400 ml-1" htmlFor="email">
                         Email Address
@@ -56,7 +59,7 @@ export default function LoginForm() {
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="w-full px-4 py-3 bg-zinc-950/50 border border-zinc-800 rounded-xl text-zinc-50 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-zinc-700 transition-all duration-200"
+                        className="w-full px-4 py-3 bg-zinc-950/50 border border-zinc-800/50 rounded-2xl text-zinc-50 placeholder:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-800/50 focus:border-zinc-700 transition-all duration-300"
                     />
                 </div>
 
@@ -65,10 +68,12 @@ export default function LoginForm() {
                         <label className="text-sm font-medium text-zinc-400" htmlFor="password">
                             Password
                         </label>
-                        {/* TEMP AUTH WORKAROUND: Forgot password disabled */}
-                        <span className="text-xs text-zinc-600 cursor-default">
-                            Recovery unavailable
-                        </span>
+                        <Link
+                            href="/forgot-password"
+                            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors duration-200"
+                        >
+                            Forgot password?
+                        </Link>
                     </div>
                     <input
                         id="password"
@@ -77,12 +82,12 @@ export default function LoginForm() {
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="w-full px-4 py-3 bg-zinc-950/50 border border-zinc-800 rounded-xl text-zinc-50 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-zinc-700 transition-all duration-200"
+                        className="w-full px-4 py-3 bg-zinc-950/50 border border-zinc-800/50 rounded-2xl text-zinc-50 placeholder:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-800/50 focus:border-zinc-700 transition-all duration-300"
                     />
                 </div>
 
                 {error && (
-                    <div className="p-3 text-sm bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg animate-shake">
+                    <div className="p-4 text-sm bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl animate-in fade-in slide-in-from-top-2 duration-300">
                         {error}
                     </div>
                 )}
@@ -90,7 +95,7 @@ export default function LoginForm() {
                 <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-3 px-4 bg-zinc-50 hover:bg-zinc-200 text-zinc-950 font-semibold rounded-xl shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                    className="w-full py-4 px-4 bg-zinc-50 hover:bg-white text-zinc-950 font-bold rounded-2xl shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 active:scale-[0.98]"
                 >
                     {loading ? (
                         <div className="w-5 h-5 border-2 border-zinc-950/30 border-t-zinc-950 rounded-full animate-spin" />

@@ -13,7 +13,6 @@ import {
     UserCircle
 } from 'lucide-react';
 import { cn } from '@/components/ui/dashboard-components';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import Image from 'next/image';
 
 interface DashboardLayoutProps {
@@ -31,60 +30,41 @@ export default function DashboardLayout({
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [userData, setUserData] = useState<{
         email: string;
-        fullName: string;
+        name: string;
         role: string;
         tenantName: string;
     } | null>(null);
 
-    const supabase = createSupabaseBrowserClient();
-
     useEffect(() => {
         async function loadUserData() {
-            // TEMP AUTH WORKAROUND – Fetch user data from database using mock user ID
-            const mockUserId = process.env.NEXT_PUBLIC_MOCK_USER_ID;
-            const mockTenantId = process.env.NEXT_PUBLIC_MOCK_TENANT_ID;
+            try {
+                const res = await fetch('/api/header')
 
-            if (mockUserId && mockTenantId) {
-                try {
-                    // Fetch user profile from database
-                    const { data: profile, error: profileError } = await supabase
-                        .from('users')
-                        .select('full_name, email, role, tenant_id, department_id')
-                        .eq('id', mockUserId)
-                        .single();
-
-                    if (profileError) {
-                        console.error('Error fetching user profile:', profileError);
-                        return;
-                    }
-
-                    if (profile) {
-                        // Fetch tenant name
-                        const { data: tenant, error: tenantError } = await supabase
-                            .from('tenants')
-                            .select('name')
-                            .eq('id', profile.tenant_id)
-                            .single();
-
-                        if (tenantError) {
-                            console.error('Error fetching tenant:', tenantError);
-                        }
-
-                        setUserData({
-                            email: profile.email || '',
-                            fullName: profile.full_name || 'User',
-                            role: profile.role || 'agent',
-                            tenantName: tenant?.name || 'Unknown Tenant'
-                        });
-                    }
-                } catch (error) {
-                    console.error('Error loading user data:', error);
+                if (!res.ok) {
+                    throw new Error('Failed to fetch user data')
                 }
+
+                const user = await res.json()
+                setUserData(user)
+            } catch (error) {
+                console.error('Error fetching user data:', error);
             }
         }
 
         loadUserData();
-    }, [supabase]);
+    }, []);
+
+    const handleLogout = async () => {
+        try {
+            await fetch('/api/auth/logout', {
+                method: 'POST'
+            });
+            router.push('/login');
+            router.refresh();
+        } catch (error) {
+            console.error('Logout failed:', error);
+        }
+    };
 
 
     const navigation = [
@@ -108,7 +88,7 @@ export default function DashboardLayout({
                 </div>
                 <div className="flex items-center gap-4">
                     <div className="flex flex-col items-end">
-                        <span className="text-xs font-medium text-zinc-50">{userData?.fullName || 'User'}</span>
+                        <span className="text-xs font-medium text-zinc-50">{userData?.name || 'User'}</span>
                         <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{userData?.role || 'role'}</span>
                     </div>
                     <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center">
@@ -144,12 +124,13 @@ export default function DashboardLayout({
 
                     <div className="p-4 border-t border-zinc-800/50">
                         <button
+                            onClick={handleLogout}
                             className={cn(
                                 "flex items-center gap-3 px-3 py-2 w-full rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
                             )}
                         >
                             <LogOut className="w-5 h-5" />
-                            {isSidebarOpen && <span className="text-sm font-medium">Logout (Disabled)</span>}
+                            {isSidebarOpen && <span className="text-sm font-medium">Logout</span>}
                         </button>
                     </div>
                 </aside>

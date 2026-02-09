@@ -24,7 +24,6 @@ import {
 import { Dropdown, DropdownTrigger, DropdownContent, DropdownItem } from '@/components/ui/dropdown';
 import { GSAPButton } from '@/components/ui/gsap-button';
 import { useUsers } from '@/hooks/useUsers';
-import { authFetch } from '@/lib/api-client';
 import { ConfirmationDialog } from '@/components/dialogs/confirm-dialog';
 import { RoleSelectionDialog } from '@/components/dialogs/role-selection-dialog';
 import { DepartmentSelectionDialog } from '@/components/dialogs/department-selection-dialog';
@@ -90,7 +89,7 @@ export default function TeamView() {
                 updates.department_id = pendingAction.value;
             }
 
-            const res = await authFetch(`/api/users/${selectedUser.id}`, {
+            const res = await fetch(`/api/users/${selectedUser.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(updates),

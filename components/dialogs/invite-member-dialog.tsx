@@ -7,7 +7,6 @@ import { GSAPButton } from '@/components/ui/gsap-button';
 import { cn } from '@/components/ui/dashboard-components';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useToast } from '@/components/ui/toast';
-import { authFetch } from '@/lib/api-client';
 
 interface InviteMemberDialogProps {
     isOpen: boolean;
@@ -39,7 +38,7 @@ export const InviteMemberDialog: React.FC<InviteMemberDialogProps> = ({
 
         setIsSubmitting(true);
         try {
-            const res = await authFetch('/api/users/invite', {
+            const res = await fetch('/api/users/invite', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
